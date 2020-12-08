@@ -1,0 +1,48 @@
+# Author: Oliver C
+# Project: Covenant (https://github.com/cobbr/Covenant)
+# License: GNU GPLv3
+
+Name: BypassHttpProfile
+Description: A custom profile that bypass AV.
+MessageTransform: |
+    public static class MessageTransform
+    {
+        public static string Transform(byte[] bytes)
+        {
+            return System.Convert.ToBase64String(bytes);
+        }
+        public static byte[] Invert(string str)
+        {
+            return System.Convert.FromBase64String(str);
+        }
+    }
+HttpUrls:
+    - /en-us/index.html?page={GUID}&v=1
+HttpRequestHeaders:
+    - Name: My-Agent
+      Value: AdsBot-Google
+HttpPostRequest: |
+    data={DATA}
+HttpResponseHeaders:
+    - Name: Server
+      Value: Microsoft-IIS/7.5
+HttpGetResponse: |
+    <html>
+        <head>
+            <title>Hello World!</title>
+        </head>
+        <body>
+            <p>Hello World!</p>
+            // Hello World! {DATA}
+        </body>
+    </html>
+HttpPostResponse: |
+    <html>
+        <head>
+            <title>Hello World!</title>
+        </head>
+        <body>
+            <p>Hello World!</p>
+            // Hello World! {DATA}
+        </body>
+    </html>
