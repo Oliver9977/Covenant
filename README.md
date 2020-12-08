@@ -5,9 +5,22 @@
 [![License](https://img.shields.io/github/license/cobbr/Covenant)](https://github.com/cobbr/Covenant/blob/master/LICENSE)
 [![Chat](https://img.shields.io/badge/chat-%23covenant-red)](https://bloodhoundgang.herokuapp.com/)
 
-Covenant is a .NET command and control framework that aims to highlight the attack surface of .NET, make the use of offensive .NET tradecraft easier, and serve as a collaborative command and control platform for red teamers.
+## 📌 Alternative Version
 
-Covenant is an ASP.NET Core, cross-platform application that includes a web-based interface that allows for multi-user collaboration.
+This fork is an alternative version with some different functionalities added: Reverse Port Forward.
+
+## 📌 Will be there SOON
+
+:fire: Process Injection Task: make it possible to easily inject to processes (by using different techniques in a highly customizable way. Create a turn on/off fork and run option for tasks executed by Assembly.Load.
+
+
+## 📌 Milestones
+
+:hammer: Improve Reverse Port Forward: make all the traffic between C2 and Grunt go through the socket connection in the port the grunt originally established the connection.
+
+:hammer: Make Reverse Port Forward Available for other types of listeners.
+
+:hammer: DNS Grunt.
 
 ![Covenant Dashboard](https://github.com/cobbr/Covenant/wiki/images/covenant-gui-dashboard.png)
 
