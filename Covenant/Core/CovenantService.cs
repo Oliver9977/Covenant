@@ -3261,9 +3261,9 @@ namespace Covenant.Core
                     if (command_rportfwd.Contains("start"))
                     {
                         string[] parsed_command = parameters[0].Split(' ');
-                        if (parsed_command.Length == 5) //
+                        if (parsed_command.Length == 6) //
                         {
-                            string[] new_params = new string[6];
+                            string[] new_params = new string[7];
                             //string externalip = new WebClient().DownloadString("http://icanhazip.com");
                             String ip_aux = tasking.Grunt.IPAddress;
                             string[] params_parsed = parameters[0].Split(' ');
@@ -3275,6 +3275,7 @@ namespace Covenant.Core
                             Random rnd = new Random();
                             int rand_port = rnd.Next(49152, 65535);
                             new_params[5] = rand_port.ToString();
+                            new_params[6] = params_parsed[5]; //C2 external ip, reachable from Crunt
                             parameters[0] = string.Join(" ", new_params);
                             tasking.GruntCommand.CommandOutput.Output += AddPortForward(params_parsed[1], params_parsed[2], params_parsed[3], ip_aux, rand_port, params_parsed[4]);
                         }
