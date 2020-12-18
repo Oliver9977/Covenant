@@ -319,7 +319,7 @@ namespace GruntExecutor
                 return ShowReversePortForwwrds();
             }
 
-            public static string DelPortForward(string data, string bind_port)
+            public static string DelPortForward(string bind_port)
             {
                 try
                 {
@@ -514,10 +514,10 @@ namespace GruntExecutor
                              random_port = commands[4]; //random
                              output += AddPortForward(ip, bind_port, target_port, target_ip, random_port);
                              break;
-                        //case "stop":
-                        //     bind_port = commands[0];
-                        //     output += DelPortForward(func, bind_port);
-                        //     break;
+                        case "stop":
+                             bind_port = commands[0];
+                             output += DelPortForward(bind_port);
+                             break;
                         case "flush":
                              output += FlushPortForward();
                              break;
