@@ -3267,11 +3267,11 @@ namespace Covenant.Core
                             //string externalip = new WebClient().DownloadString("http://icanhazip.com");
                             String ip_aux = tasking.Grunt.IPAddress;
                             string[] params_parsed = parameters[0].Split(' ');
-                            new_params[0] = params_parsed[0];
-                            new_params[1] = params_parsed[1];  //externalip.Trim(); //this should be read from listener .. 
-                            new_params[2] = params_parsed[2];
-                            new_params[3] = params_parsed[3];
-                            new_params[4] = params_parsed[4];
+                            new_params[0] = params_parsed[0]; //start
+                            new_params[1] = params_parsed[1]; //8080 
+                            new_params[2] = params_parsed[2]; //192.168.99.34 
+                            new_params[3] = params_parsed[3]; //80
+                            new_params[4] = params_parsed[4]; //ip allow //10.0.2.15
                             Random rnd = new Random();
                             int rand_port = rnd.Next(49152, 65535);
                             new_params[5] = rand_port.ToString();
