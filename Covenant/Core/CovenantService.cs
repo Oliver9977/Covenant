@@ -2944,7 +2944,7 @@ namespace Covenant.Core
             Socket clientSocket2 = null;
             try
             {
-                int counter = 0;
+                //int counter = 0;
 
 
                 while (states[bind_port] == true)
@@ -3230,12 +3230,15 @@ namespace Covenant.Core
                             sock_gr.Close();
                             break;
                         }
+                        //check with delay
+                        Console.WriteLine("Ping back ...\n");
                         System.Threading.Thread.Sleep(2000);
                     }
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("Threads bug");
+                    
+                    Console.WriteLine("Threads bug: " + e.Message);
                 }
             }
         }

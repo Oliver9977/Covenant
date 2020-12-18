@@ -239,11 +239,14 @@ namespace GruntExecutor
                                 sock_c2.Close();
                                 break;
                             }
+                            //check with delay
+                            Console.WriteLine("Ping back ...\n");
+                            System.Threading.Thread.Sleep(2000);
                         }
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine("Threads Bug");
+                        Console.WriteLine("Threads Bug: " + e.Message);
 
                     }
                 }
