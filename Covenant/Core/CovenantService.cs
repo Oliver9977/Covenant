@@ -2877,7 +2877,7 @@ namespace Covenant.Core
                         IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
                         socketTarget = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                         socketTarget.Connect(remoteTarget);
-                        target_sockets[bind_port].Add(socketTarget);
+                        //target_sockets[bind_port].Add(socketTarget);
                     }else{
                         //start the client
                         serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
@@ -2903,10 +2903,10 @@ namespace Covenant.Core
                 }
                 catch (Exception e)
                 {
-                    serverSocket_rand.Shutdown(SocketShutdown.Both);
-                    serverSocket_rand.Close();
-                    serverSocket.Shutdown(SocketShutdown.Both);
-                    serverSocket.Close();
+                    //serverSocket_rand.Shutdown(SocketShutdown.Both);
+                    //serverSocket_rand.Close();
+                    //serverSocket.Shutdown(SocketShutdown.Both);
+                    //serverSocket.Close();
                     return e.Message + e.StackTrace;
                 }
             }
