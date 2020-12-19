@@ -76,15 +76,7 @@ namespace GruntExecutor
 
                 public void asyncRead(Socket socket, int id, string bind_port)
                 {
-                    String from = "";
-                    if (id == 0)
-                    {
-                        from = "C2";
-                    }
-                    else
-                    {
-                        from = "target";
-                    }
+
                     var data = new byte[8192];
                     while (states[bind_port] == true)
                     {
@@ -99,8 +91,10 @@ namespace GruntExecutor
                                 else
                                 {
                                     data = new byte[4];
+                                    Console.WriteLine("DEBUG:: Waiting for C2 start tag ...");
                                     int i = socket.Receive(data, 4, SocketFlags.None);
                                     int length = BitConverter.ToInt32(data, 0);
+                                    Console.WriteLine("DEBUG:: C2 start tag: " + length);
                                     byte[] body = new byte[length];
                                     int offset = 0;
                                     while (length > 0)
@@ -128,7 +122,9 @@ namespace GruntExecutor
                                 else
                                 {
                                     data = new byte[8192];
+                                    Console.WriteLine("DEBUG:: Waiting for data from target ...");
                                     int size_data = socket.Receive(data);
+                                    Console.WriteLine("DEBUG:: data size: " + size_data);
                                     bytesFromTarget.Add(new Byte_Data(data.Take(size_data).ToArray(), size_data));
 
 
@@ -147,8 +143,11 @@ namespace GruntExecutor
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message + e.StackTrace);
+                        Console.WriteLine("DEBUG:: asyncRead Error: " + e.Message);
                     }
+
+                    Console.WriteLine("DEBUG:: asyncRead Exited, id " + id);
+
                 }
 
                 public void asyncWrite(Socket socket, int id, string bind_port)
@@ -197,8 +196,9 @@ namespace GruntExecutor
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message + e.StackTrace);
+                        Console.WriteLine("DEBUG:: asyncWrite Error: " + e.Message);
                     }
+                    Console.WriteLine("DEBUG:: asyncWrite Exited, id " + id);
                 }
 
                 public void doChat(string bind_port, Socket sock_c2, Socket sock_route)
@@ -217,38 +217,87 @@ namespace GruntExecutor
                         keep_reading_from_Target.Start();
                         System.Threading.Thread.Sleep(1000);
                         keep_writing_to_C2.Start();
-                        while ((true))
+                        while (true) //keep the loop running unless everything killed
                         {
                             try
                             {
+                                //check sock_c2
                                 int result1 = sock_c2.Available;
+                                //check client
+                                int result2 = sock_route.Available;
                             }
-                            catch (Exception ef)
+                            
+                            catch (Exception e)
                             {
-                                keep_reading_from_C2.Abort();
-                                keep_reading_from_C2 = null;
+                                
+                                //still try close it gratefully
+                                //close sock_route
+                                try{
+                                    Console.WriteLine("DEBUG:: Trying to shutdown ...");
+                                    sock_route.Shutdown(SocketShutdown.Both);
+                                    sock_route.Close();
+                                }
+                                catch (ObjectDisposedException ef){
+                                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                                    sock_route.Close();
+                                }
+                                catch (Exception ef){
+                                    Console.WriteLine("DEBUG:: Nothing to do ...");
+                                }
+                                //close sock_route
+                                try{
+                                    Console.WriteLine("DEBUG:: Trying to shutdown ...");
+                                    sock_c2.Shutdown(SocketShutdown.Both);
+                                    sock_c2.Close();
+                                }
+                                catch (ObjectDisposedException ef){
+                                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                                    sock_c2.Close();
+                                }
+                                catch (Exception ef){
+                                    Console.WriteLine("DEBUG:: Nothing to do ...");
+                                }
+
+                                //sock closted
+                                Console.WriteLine("DEBUG:: sock closed. Killing client thread ..." + e.Message);
+                                Console.WriteLine("DEBUG:: killing keep_writing_to_Target ... ");
                                 keep_writing_to_Target.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_writing_to_Target ... ");
+                                keep_writing_to_Target.Join();
                                 keep_writing_to_Target = null;
+                                
+                                Console.WriteLine("DEBUG:: killing keep_reading_from_Target ... ");
                                 keep_reading_from_Target.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_reading_from_Target ... ");
+                                keep_reading_from_Target.Join();
                                 keep_reading_from_Target = null;
+
+                                Console.WriteLine("DEBUG:: killing keep_reading_from_C2 ... ");
+                                keep_reading_from_C2.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_reading_from_C2 ... ");
+                                keep_reading_from_C2.Join();
+                                keep_reading_from_C2 = null;
+
+                                Console.WriteLine("DEBUG:: killing keep_writing_to_C2 ... ");
                                 keep_writing_to_C2.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_writing_to_C2 ... ");
+                                keep_writing_to_C2.Join();
                                 keep_writing_to_C2 = null;
-                                sock_route.Shutdown(SocketShutdown.Both);
-                                sock_route.Close();
-                                sock_c2.Shutdown(SocketShutdown.Both);
-                                sock_c2.Close();
                                 break;
+                                
                             }
+                            
+                            
                             //check with delay
-                            Console.WriteLine("Ping back ...\n");
+                            Console.WriteLine("Ping back ...");
                             System.Threading.Thread.Sleep(2000);
                         }
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine("Threads Bug: " + e.Message);
-
                     }
+                    Console.WriteLine("DEBUG:: doChat Exited ... ");
                 }
             }
 
@@ -280,6 +329,7 @@ namespace GruntExecutor
                         try
                         {
                             if (mode == listener_mode){
+                                Console.WriteLine("DEBUG:: Waiting for Client connection ... ");
                                 socketIncoming = socketListener.Accept(); //keep waiting for connections
                                 //may check where the connction from
 
