@@ -2845,8 +2845,8 @@ namespace Covenant.Core
         public static String AddPortForward(string bind_port, string target_ip, string target_port, string ipGrunt, int rand_port, string ip_allow, int mode)
         {
             
-            const int remote_mode = 1;
-            const int local_mode = 0;
+            int remote_mode = 1;
+            int local_mode = 0;
             Socket socketTarget = null;
             
             var bindAddress = IPAddress.Parse("0.0.0.0");
