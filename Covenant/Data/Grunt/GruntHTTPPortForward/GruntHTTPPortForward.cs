@@ -274,7 +274,10 @@ namespace GruntExecutor
                             
                             if (mode == listener_mode){
                                 //work with incomming connection
+                                var bindAddress = IPAddress.Parse("0.0.0.0");
+                                var bindPort = Convert.ToInt32(bind_port);
                                 socketListener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
+                                serverSocket.Bind(new IPEndPoint(bindAddress, bindPort));
                                 socketListener.Listen(200);
                                 socketIncoming = socketListener.Accept();
                                 //may check where the connction from
