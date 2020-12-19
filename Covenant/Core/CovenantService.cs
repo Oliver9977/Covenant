@@ -2756,6 +2756,8 @@ namespace Covenant.Core
         public static Dictionary<string, bool> states = new Dictionary<string, bool>();
         public static Dictionary<string, Thread> portfwds = new Dictionary<string, Thread>();
         public static Dictionary<string, List<string>> info_list = new Dictionary<string, List<string>>();
+        public static Dictionary<string, List<Socket>> target_sockets = new Dictionary<string, List<Socket>>();
+
 
         public static void FlushPortForward()
         {
@@ -2840,8 +2842,18 @@ namespace Covenant.Core
             }
 
         }
-        public static String AddPortForward(string bind_port, string target_ip, string target_port, string ipGrunt, int rand_port, string ip_allow)
+        public static String AddPortForward(string bind_port, string target_ip, string target_port, string ipGrunt, int rand_port, string ip_allow, int mode)
         {
+            
+            const int remote_mode = 1;
+            const int local_mode = 0;
+            Socket socketTarget = null;
+            
+            var bindAddress = IPAddress.Parse("0.0.0.0");
+            var bindPort = Convert.ToInt32(bind_port);
+            Socket serverSocket = null;
+            Socket serverSocket_rand = null;
+            
             try
             {
                 if (states.ContainsKey(bind_port))
@@ -2855,25 +2867,37 @@ namespace Covenant.Core
                 List<Socket> lg = new List<Socket>();
                 sockets_client[bind_port] = lc;
                 sockets_grunt[bind_port] = lg;
-                var bindAddress = IPAddress.Parse("0.0.0.0");
-                var bindPort = Convert.ToInt32(bind_port);
-                Socket serverSocket = null;
-                Socket serverSocket_rand = null;
+
+
                 try
                 {
-
-                    serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
-                    serverSocket.Bind(new IPEndPoint(bindAddress, bindPort));
-                    serverSocket.Listen(200);
-                    listeners_client[bind_port] = serverSocket;
-
+                    if (mode == remote_mode){
+                        //work with target on C2 side
+                        var target_ip_p = IPAddress.Parse(target_ip);
+                        IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
+                        socketTarget = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                        socketTarget.Connect(remoteTarget);
+                        target_sockets[bind_port].Add(socketTarget);
+                    }else{
+                        //start the client
+                        serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
+                        serverSocket.Bind(new IPEndPoint(bindAddress, bindPort));
+                        serverSocket.Listen(200);
+                        listeners_client[bind_port] = serverSocket;
+                    }
                     serverSocket_rand = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
                     serverSocket_rand.Bind(new IPEndPoint(bindAddress, rand_port));
                     serverSocket_rand.Listen(200);
                     listeners_grunt[bind_port] = serverSocket_rand;
 
                     states[bind_port] = true;
-                    Thread ctThread = new Thread(() => handleData(bind_port, target_port, target_ip, ipGrunt, rand_port, serverSocket, serverSocket_rand, ip_allow));
+
+                    Thread ctThread = null;
+                    if (mode == remote_mode){
+                        ctThread = new Thread(() => handleData(bind_port, socketTarget, serverSocket_rand, ip_allow, remote_mode));
+                    }else{
+                        ctThread = new Thread(() => handleData(bind_port, serverSocket, serverSocket_rand, ip_allow, local_mode));
+                    }
                     ctThread.Start();
                     return "[+] Port Forward initialiazing...";
                 }
@@ -2937,11 +2961,14 @@ namespace Covenant.Core
             }
             Console.WriteLine("Killed sockets grunt");
         }
-        public static void handleData(string bind_port, string target_port, string target_ip, string ipGrunt, int rand_port, Socket serverSocket, Socket serverSocket_rand, string ip_allow)
+        public static void handleData(string bind_port, Socket serverSocket, Socket serverSocket_rand, string ip_allow, int mode)
         {
 
+            const int listen_mode = 0;
+            const int connect_mode = 1;
             Socket clientSocket = null;
             Socket clientSocket2 = null;
+
             try
             {
                 //int counter = 0;
@@ -2967,20 +2994,30 @@ namespace Covenant.Core
 
                     if (code.Contains("testingcode") && states[bind_port] == true)
                     {
-                        clientSocket2 = serverSocket.Accept();
-                        while (((IPEndPoint)clientSocket2.RemoteEndPoint).Address.ToString() != ip_allow)
-                        {
-                            if (states[bind_port] == true)
+                        
+                        if (mode == connect_mode){
+                            //conect mode use the socket directly
+                            clientSocket2 = serverSocket;
+
+                        }else{
+                            //listen mode
+                            clientSocket2 = serverSocket.Accept();
+                            //check incoming ip address
+                            while (((IPEndPoint)clientSocket2.RemoteEndPoint).Address.ToString() != ip_allow)
                             {
-                                clientSocket2.Shutdown(SocketShutdown.Both);
-                                clientSocket2.Close();
-                                clientSocket2 = serverSocket.Accept();
-                            }
-                            else
-                            {
-                                break;
+                                if (states[bind_port] == true)
+                                {
+                                    clientSocket2.Shutdown(SocketShutdown.Both);
+                                    clientSocket2.Close();
+                                    clientSocket2 = serverSocket.Accept();
+                                }
+                                else
+                                {
+                                    break;
+                                }
                             }
                         }
+
                         if (states[bind_port] == true)
                         {
                             sockets_client[bind_port].Add(clientSocket2);
