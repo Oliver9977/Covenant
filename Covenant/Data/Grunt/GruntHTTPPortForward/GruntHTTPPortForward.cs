@@ -266,20 +266,21 @@ namespace GruntExecutor
                     Socket socketListener = null;
                     Socket socketIncoming = null;
                     const int listener_mode = 1;
+                    if (mode == listener_mode){
+                        //work with incomming connection
+                        var bindAddress = IPAddress.Parse("0.0.0.0");
+                        var bindPort = Convert.ToInt32(bind_port);
+                        socketListener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
+                        socketListener.Bind(new IPEndPoint(bindAddress, bindPort));
+                        socketListener.Listen(200);
+                    }
 
                     while (states[bind_port])
                     {
                         try
                         {
-                            
                             if (mode == listener_mode){
-                                //work with incomming connection
-                                var bindAddress = IPAddress.Parse("0.0.0.0");
-                                var bindPort = Convert.ToInt32(bind_port);
-                                socketListener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
-                                serverSocket.Bind(new IPEndPoint(bindAddress, bindPort));
-                                socketListener.Listen(200);
-                                socketIncoming = socketListener.Accept();
+                                socketIncoming = socketListener.Accept(); //keep waiting for connections
                                 //may check where the connction from
 
                             }else{
