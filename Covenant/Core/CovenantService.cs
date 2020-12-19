@@ -2845,8 +2845,8 @@ namespace Covenant.Core
         public static String AddPortForward(string bind_port, string target_ip, string target_port, string ipGrunt, int rand_port, string ip_allow, int mode)
         {
             
-            int remote_mode = 1;
-            int local_mode = 0;
+            const int remote_mode = 1;
+            const int local_mode = 0;
             Socket socketTarget = null;
             
             var bindAddress = IPAddress.Parse("0.0.0.0");
@@ -3317,7 +3317,7 @@ namespace Covenant.Core
                             new_params[5] = rand_port.ToString();
                             new_params[6] = params_parsed[5]; //C2 external ip, reachable from Crunt
                             parameters[0] = string.Join(" ", new_params);
-                            tasking.GruntCommand.CommandOutput.Output += AddPortForward(params_parsed[1], params_parsed[2], params_parsed[3], ip_aux, rand_port, params_parsed[4]);
+                            tasking.GruntCommand.CommandOutput.Output += AddPortForward(params_parsed[1], params_parsed[2], params_parsed[3], ip_aux, rand_port, params_parsed[4], 1); //default to mode 1
                         }
                         else
                         {
