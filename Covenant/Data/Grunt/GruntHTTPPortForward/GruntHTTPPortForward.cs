@@ -204,6 +204,7 @@ namespace GruntExecutor
                 public void doChat(string bind_port, Socket sock_c2, Socket sock_route)
                 {
                     
+                    int sock_timeout = 10; //assume died after 10 ping back
                     Thread keep_reading_from_C2 = new Thread(() => asyncRead(sock_c2, 0, bind_port));
                     Thread keep_writing_to_Target = new Thread(() => asyncWrite(sock_route, 0, bind_port));
                     Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_route, 1, bind_port));
@@ -291,8 +292,67 @@ namespace GruntExecutor
                             //check with delay
                             Console.WriteLine("Ping back ...");
                             System.Threading.Thread.Sleep(2000);
-                        }
-                    }
+                            sock_timeout = sock_timeout -1;
+                            //check if timeout
+                            if (sock_timeout == 0){
+                                //assume died
+                                //close sock_route
+                                try{
+                                    Console.WriteLine("DEBUG:: Trying to shutdown sock_route ...");
+                                    sock_route.Shutdown(SocketShutdown.Both);
+                                    sock_route.Close();
+                                }
+                                catch (ObjectDisposedException ef){
+                                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                                    sock_route.Close();
+                                }
+                                catch (Exception ef){
+                                    Console.WriteLine("DEBUG:: Nothing to do ...");
+                                }
+                                //close sock_route
+                                try{
+                                    Console.WriteLine("DEBUG:: Trying to shutdown sock_c2 ...");
+                                    sock_c2.Shutdown(SocketShutdown.Both);
+                                    sock_c2.Close();
+                                }
+                                catch (ObjectDisposedException ef){
+                                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                                    sock_c2.Close();
+                                }
+                                catch (Exception ef){
+                                    Console.WriteLine("DEBUG:: Nothing to do ...");
+                                }
+
+                                //sock closted
+                                Console.WriteLine("DEBUG:: sock closed. Killing client thread ..." + e.Message);
+                                Console.WriteLine("DEBUG:: killing keep_writing_to_Target ... ");
+                                keep_writing_to_Target.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_writing_to_Target ... ");
+                                keep_writing_to_Target.Join();
+                                keep_writing_to_Target = null;
+                                
+                                Console.WriteLine("DEBUG:: killing keep_reading_from_Target ... ");
+                                keep_reading_from_Target.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_reading_from_Target ... ");
+                                keep_reading_from_Target.Join();
+                                keep_reading_from_Target = null;
+
+                                Console.WriteLine("DEBUG:: killing keep_reading_from_C2 ... ");
+                                keep_reading_from_C2.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_reading_from_C2 ... ");
+                                keep_reading_from_C2.Join();
+                                keep_reading_from_C2 = null;
+
+                                Console.WriteLine("DEBUG:: killing keep_writing_to_C2 ... ");
+                                keep_writing_to_C2.Abort();
+                                Console.WriteLine("DEBUG:: joinning keep_writing_to_C2 ... ");
+                                keep_writing_to_C2.Join();
+                                keep_writing_to_C2 = null;
+
+                            }//assume died end
+
+                        }//end while
+                    }//end try
                     catch (Exception e)
                     {
                         Console.WriteLine("Threads Bug: " + e.Message);
