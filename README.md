@@ -5,22 +5,21 @@
 [![License](https://img.shields.io/github/license/cobbr/Covenant)](https://github.com/cobbr/Covenant/blob/master/LICENSE)
 [![Chat](https://img.shields.io/badge/chat-%23covenant-red)](https://bloodhoundgang.herokuapp.com/)
 
-## 📌 Alternative Version
+## Custom fork
 
-This fork is an alternative version with some different functionalities added: Reverse Port Forward.
+This is an custom version with enhancement based on the Zero Point Security Fork. 
 
-## 📌 Will be there SOON
+⭐AV bypass with some ideas from [Red Team Ops](https://www.zeropointsecurity.co.uk/red-team-ops).
 
-:fire: Process Injection Task: make it possible to easily inject to processes (by using different techniques in a highly customizable way. Create a turn on/off fork and run option for tasks executed by Assembly.Load.
+⭐Reverse Port Forwarding inspired by [Covenant Alternate](https://github.com/thiagomayllart/Covenant_Alternate).
 
+![alt text](beta0.1.png)
 
-## 📌 Milestones
+## TODO
 
-:hammer: Improve Reverse Port Forward: make all the traffic between C2 and Grunt go through the socket connection in the port the grunt originally established the connection.
+⭐Local Port Forwarding which is effectively socks proxy + socat. 
 
-:hammer: Make Reverse Port Forward Available for other types of listeners.
-
-:hammer: DNS Grunt.
+## Original Version
 
 ![Covenant Dashboard](https://github.com/cobbr/Covenant/wiki/images/covenant-gui-dashboard.png)
 
