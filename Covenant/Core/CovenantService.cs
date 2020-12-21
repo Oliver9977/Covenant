@@ -2747,6 +2747,7 @@ namespace Covenant.Core
         }
 
         //Port Forward by Thiago Mayllart
+        //Enhanced by Oliver
 
 
         public static Dictionary<string, Socket> listeners_client = new Dictionary<string, Socket>();
@@ -2912,52 +2913,66 @@ namespace Covenant.Core
             {
                 return e.Message + e.StackTrace;
             }
-        }
+        }//end of AddPortForward
 
 
 
         public static void DelPortForward(string bind_port)
         {
-            try
-            {
+            
+            
+            try{
                 states[bind_port] = false;
-                listeners_client[bind_port].Shutdown(SocketShutdown.Both);
-                listeners_client[bind_port].Close();
+                //assume no traffic
+                //this should break handleData
+                Console.WriteLine("DEBUG:: Trying to shutdown listeners_grunt[bind_port] ...");
                 listeners_grunt[bind_port].Shutdown(SocketShutdown.Both);
                 listeners_grunt[bind_port].Close();
+            }
+            catch (ObjectDisposedException ef){
+                Console.WriteLine("DEBUG:: ShutDown failed ObjectDisposedException, Trying to close ...");
+                listeners_grunt[bind_port].Close();
+            }
+            catch (SocketException ef){
+                Console.WriteLine("DEBUG:: ShutDown failed SocketException, Trying to close ...");
+                listeners_grunt[bind_port].Close();
+            }
+            catch (Exception ef){
+                Console.WriteLine("DEBUG:: Nothing to do ...");
+            }
 
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message + e.StackTrace);
-            }
-            Console.WriteLine("Killed Listeners");
-            foreach (Socket sc in sockets_client[bind_port])
-            {
-                try
-                {
-                    sc.Shutdown(SocketShutdown.Both);
-                    sc.Close();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message + e.StackTrace);
-                }
-            }
-            Console.WriteLine("Killed sockets client");
-            foreach (Socket sc2 in sockets_grunt[bind_port])
-            {
-                try
-                {
-                    sc2.Shutdown(SocketShutdown.Both);
-                    sc2.Close();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message + e.StackTrace);
-                }
-            }
-            Console.WriteLine("Killed sockets grunt");
+            // }
+            // catch (Exception e)
+            // {
+            //     Console.WriteLine(e.Message + e.StackTrace);
+            // }
+            // Console.WriteLine("Killed Listeners");
+            // foreach (Socket sc in sockets_client[bind_port])
+            // {
+            //     try
+            //     {
+            //         sc.Shutdown(SocketShutdown.Both);
+            //         sc.Close();
+            //     }
+            //     catch (Exception e)
+            //     {
+            //         Console.WriteLine(e.Message + e.StackTrace);
+            //     }
+            // }
+            // Console.WriteLine("Killed sockets client");
+            // foreach (Socket sc2 in sockets_grunt[bind_port])
+            // {
+            //     try
+            //     {
+            //         sc2.Shutdown(SocketShutdown.Both);
+            //         sc2.Close();
+            //     }
+            //     catch (Exception e)
+            //     {
+            //         Console.WriteLine(e.Message + e.StackTrace);
+            //     }
+            // }
+            // Console.WriteLine("Killed sockets grunt");
         }
         public static void handleData(string bind_port, string target_ip, string target_port, Socket serverSocket, Socket serverSocket_rand, string ip_allow, int mode)
         {
@@ -2977,6 +2992,7 @@ namespace Covenant.Core
                     var data_temp = new byte[256];
                     Console.WriteLine("DEBUG:: Waiting for Grunt connection ...");
                     clientSocket = serverSocket_rand.Accept();
+                    Console.WriteLine("DEBUG:: End of Accept .. ");
                     clientSocket.Receive(data_temp);
                     string code = Encoding.UTF8.GetString(data_temp);
                     while (!code.Contains("testingcode") && states[bind_port] == true)
@@ -3030,32 +3046,18 @@ namespace Covenant.Core
                         
                     }// end if testingcode is here
 
-
-
                 }// end while 
 
-                clientSocket.Shutdown(SocketShutdown.Both);
-                clientSocket.Close();
-                clientSocket2.Shutdown(SocketShutdown.Both);
-                clientSocket2.Close();
             }
 
             catch (Exception e)
             {
-                Console.WriteLine(e.Message + e.StackTrace);
+                Console.WriteLine(e.Message);
                 states[bind_port] = false;
-                try
-                {
-                    clientSocket2.Shutdown(SocketShutdown.Both);
-                    clientSocket2.Close();
-                    clientSocket.Shutdown(SocketShutdown.Both);
-                    clientSocket.Close();
-                }
-                catch (Exception ef)
-                {
-                    Console.WriteLine(ef.Message + ef.StackTrace);
-                }
             }
+            
+            Console.WriteLine("DEBUG:: end of handleData ... ");
+            
         }
 
         public class handleClinet

