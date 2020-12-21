@@ -3115,6 +3115,10 @@ namespace Covenant.Core
                                 data = new byte[8192];
                                 Console.WriteLine("DEBUG:: Waiting for data from target ...");
                                 int size_data = socket.Receive(data);
+                                if (size_data == 0){
+                                    Console.WriteLine("DEBUG:: This should fix FIN_WAIT ...");
+                                    break;
+                                }
                                 Console.WriteLine("DEBUG:: data size: " + size_data);
                                 bytesFromClientR.Add(new Byte_Data(data.Take(size_data).ToArray(), size_data));
 
@@ -3131,13 +3135,14 @@ namespace Covenant.Core
                                 data = new byte[4];
                                 Console.WriteLine("DEBUG:: Waiting for C2 start tag ...");
                                 int i = socket.Receive(data, 4, SocketFlags.None);
-                                int length = BitConverter.ToInt32(data, 0);
-                                Console.WriteLine("DEBUG:: C2 start tag: " + length);
-                                //if length == 0 assume died
-                                if (length == 0){
-                                    Console.WriteLine("DEBUG:: Assume died ..");
+                                Console.WriteLine("DEBUG:: C2 start tag i: " + i);
+                                if (i == 0){
+                                    Console.WriteLine("DEBUG:: This should fix FIN_WAIT ...");
                                     break;
                                 }
+                                int length = BitConverter.ToInt32(data, 0);
+                                Console.WriteLine("DEBUG:: C2 start tag: " + length);
+                                
                                 byte[] body = new byte[length];
                                 int offset = 0;
                                 while (length > 0)

